@@ -1,0 +1,45 @@
+{
+  "name": "job-hunter-ai",
+  "version": "0.1.0",
+  "description": "Agent IA autonome de recherche d'emploi (scraping FR, mots-clés + scoring LLM, planification et alertes email)",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "job-hunter-ai": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "run:once": "tsx src/index.ts --once",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "keywords": [
+    "job",
+    "scraper",
+    "llm",
+    "automation",
+    "france"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "fast-levenshtein": "^3.0.0",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.15",
+    "puppeteer": "^23.4.0",
+    "undici": "^6.20.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^6.4.16",
+    "prettier": "^3.3.3",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}
