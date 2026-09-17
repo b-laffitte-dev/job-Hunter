@@ -1,12 +1,20 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { ensureDir } from "./fs.js";
+import { resolveDataDir, ensureHomeDir } from "../paths.js";
 import type { JobOffer, ScoredJob } from "../types/index.js";
 
-const DATA_DIR = resolve("data");
-const SEEN_PATH = resolve(DATA_DIR, "seen.json");
-const LATEST_PATH = resolve(DATA_DIR, "latest.json");
-const HISTORY_DIR = resolve(DATA_DIR, "history");
+let _dataDir: string | null = null;
+function dataDir(): string {
+  if (!_dataDir) {
+    ensureHomeDir();
+    _dataDir = resolveDataDir();
+  }
+  return _dataDir;
+}
+function seenPath(): string { return resolve(dataDir(), "seen.json"); }
+function latestPath(): string { return resolve(dataDir(), "latest.json"); }
+function historyDir(): string { return resolve(dataDir(), "history"); }
 
 export interface SeenStore {
   seenIds: string[];
@@ -14,18 +22,19 @@ export interface SeenStore {
 }
 
 export function loadSeen(): SeenStore {
-  ensureDir(DATA_DIR);
-  if (!existsSync(SEEN_PATH)) return { seenIds: [], seenUrls: [] };
+  ensureDir(dataDir());
+  const p = seenPath();
+  if (!existsSync(p)) return { seenIds: [], seenUrls: [] };
   try {
-    return JSON.parse(readFileSync(SEEN_PATH, "utf-8")) as SeenStore;
+    return JSON.parse(readFileSync(p, "utf-8")) as SeenStore;
   } catch {
     return { seenIds: [], seenUrls: [] };
   }
 }
 
 export function saveSeen(store: SeenStore): void {
-  ensureDir(DATA_DIR);
-  writeFileSync(SEEN_PATH, JSON.stringify(store, null, 2), "utf-8");
+  ensureDir(dataDir());
+  writeFileSync(seenPath(), JSON.stringify(store, null, 2), "utf-8");
 }
 
 export function isNewOffer(offer: JobOffer, store: SeenStore): boolean {
@@ -45,23 +54,24 @@ export function markSeen(offers: JobOffer[], store: SeenStore): void {
 }
 
 export function saveLatest(offers: ScoredJob[]): void {
-  ensureDir(DATA_DIR);
-  writeFileSync(LATEST_PATH, JSON.stringify(offers, null, 2), "utf-8");
+  ensureDir(dataDir());
+  writeFileSync(latestPath(), JSON.stringify(offers, null, 2), "utf-8");
 }
 
 export function loadLatest(): ScoredJob[] {
-  ensureDir(DATA_DIR);
-  if (!existsSync(LATEST_PATH)) return [];
+  ensureDir(dataDir());
+  const p = latestPath();
+  if (!existsSync(p)) return [];
   try {
-    return JSON.parse(readFileSync(LATEST_PATH, "utf-8")) as ScoredJob[];
+    return JSON.parse(readFileSync(p, "utf-8")) as ScoredJob[];
   } catch {
     return [];
   }
 }
 
 export function archiveRun(offers: ScoredJob[], runId: string): string {
-  ensureDir(HISTORY_DIR);
-  const path = resolve(HISTORY_DIR, `run-${runId}.json`);
+  ensureDir(historyDir());
+  const path = resolve(historyDir(), `run-${runId}.json`);
   writeFileSync(path, JSON.stringify(offers, null, 2), "utf-8");
   return path;
 }

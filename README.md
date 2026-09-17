@@ -94,6 +94,79 @@ npm run dev
 
 ---
 
+## 🍎 Installation macOS (binaire autonome)
+
+Pour une installation **sans Node.js** sur macOS, téléchargez le binaire autonome généré par GitHub Actions (Node SEA — Single Executable Application).
+
+### Installation en une commande
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/b-laffitte-dev/job-Hunter/main/scripts/install-macos.sh | bash
+```
+
+Le script :
+1. détecte l'architecture (Apple Silicon `arm64` ou Intel `x64`),
+2. télécharge le binaire correspondant depuis la dernière release,
+3. l'installe dans `~/.local/bin` (ou `/usr/local/bin` si vous avez les droits),
+4. crée `~/.job-hunter-ai/` avec `.env` et `config.json` (sans écraser l'existant).
+
+### Installation manuelle
+
+1. Allez sur la page [Releases](https://github.com/b-laffitte-dev/job-Hunter/releases) et téléchargez `job-hunter-ai-darwin-arm64.tar.gz` (Apple Silicon) ou `job-hunter-ai-darwin-x64.tar.gz` (Intel).
+2. Décompressez et installez :
+
+```bash
+tar -xzf job-hunter-ai-darwin-*.tar.gz
+chmod +x job-hunter-ai
+# installation locale (recommandé)
+mkdir -p ~/.local/bin && mv job-hunter-ai ~/.local/bin/
+# ou système (avec sudo): sudo mv job-hunter-ai /usr/local/bin/
+```
+
+### Configuration dans `$HOME`
+
+Le binaire autonome cherche sa configuration et ses données dans **`~/.job-hunter-ai/`** (créé automatiquement au premier lancement) :
+
+```
+~/.job-hunter-ai/
+├── .env          # secrets (LLM_API_KEY, SMTP, France Travail…)
+├── config.json   # recherche, critères, sources
+└── data/         # historique des runs, doublons, CSV
+    ├── seen.json
+    ├── latest.json
+    └── history/
+```
+
+Première configuration :
+
+```bash
+# Éditez vos clés (LLM_API_KEY est requis)
+$EDITOR ~/.job-hunter-ai/.env
+# Ajustez votre recherche (ex: secrétariat médico social)
+$EDITOR ~/.job-hunter-ai/config.json
+
+# Lancez l'interface de chat
+job-hunter-ai --serve
+# → ouvrez http://127.0.0.1:3000
+
+# Ou une recherche unique
+job-hunter-ai --once
+```
+
+### Note sur le binaire SEA
+
+Le binaire embarque le runtime Node.js et tout le code applicatif (dont l'UI web), il n'a donc **aucune dépendance externe à installer**. La seule dépendance optionnelle non embarquée est `puppeteer` (pour le scraping de sites SPA) — désactivée par défaut (`ENABLE_PUPPETEER=false`).
+
+### Déclencher un build de release
+
+Le workflow `.github/workflows/build-macos.yml` se déclenche :
+- automatiquement quand vous poussez un tag `v*` (ex: `git tag v0.1.0 && git push origin v0.1.0`),
+- manuellement depuis l'onglet Actions → « build-macos-package » → Run workflow.
+
+Il compile pour `arm64` (macos-14) et `x64` (macos-13) et publie les binaires en release GitHub.
+
+---
+
 ## 💬 Interface de chat
 
 Le serveur web (`npm run serve`) expose une UI conversationnelle pour **lancer et affiner les recherches en langage naturel**.
@@ -164,6 +237,8 @@ job-hunter-ai/
 │   ├── runner.ts       # orchestration du pipeline
 │   └── index.ts        # CLI (commander)
 ├── public/             # UI web statique (index.html, app.js, style.css)
+├── scripts/            # gen-ui-assets.mjs, install-macos.sh
+├── .github/workflows/  # build-macos.yml (GitHub Action binaire SEA)
 ├── config/config.example.json
 ├── data/               # historique des runs (gitignoré sauf .gitkeep)
 ├── .env.example

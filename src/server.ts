@@ -6,6 +6,7 @@ import { loadEnv, loadConfig } from "./config/index.js";
 import { interpretMessage, stateFromConfig, type ChatState } from "./llm/chat.js";
 import { runWithConfig } from "./runner.js";
 import { loadLatest } from "./storage/store.js";
+import { UI_ASSETS } from "./ui-assets.generated.js";
 import type { AppConfig, ScoredJob } from "./types/index.js";
 
 const MIME: Record<string, string> = {
@@ -54,11 +55,18 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 }
 
 function serveStatic(res: ServerResponse, urlPath: string): boolean {
+  const route = urlPath === "/" ? "/" : urlPath.split("?")[0];
+  if (route.includes("..")) return false;
+  // 1. UI embarquée dans le binaire (priorité — fonctionne sans fichiers externes)
+  const asset = UI_ASSETS[route];
+  if (asset) {
+    res.writeHead(200, { "content-type": asset.mime });
+    res.end(asset.body);
+    return true;
+  }
+  // 2. Fallback système de fichiers (mode dev avec public/)
   const publicDir = resolve("public");
-  let rel = urlPath === "/" ? "/index.html" : urlPath;
-  // Sécurité : empêcher la traversée de répertoire
-  rel = rel.split("?")[0];
-  if (rel.includes("..")) return false;
+  const rel = route === "/" ? "/index.html" : route;
   const filePath = resolve(publicDir, rel.replace(/^\//, ""));
   if (!existsSync(filePath)) return false;
   const ext = extname(filePath);
@@ -178,9 +186,8 @@ export function startServer(): { url: string; close: () => void } {
     }
 
     try {
-      if (url === "/" || url.startsWith("/?") || /\/(index\.html|app\.js|style\.css)$/.test(url)) {
-        if (serveStatic(res, url)) return;
-      }
+      // Sert l'UI embarquée (ou le fallback public/ en dev)
+      if (serveStatic(res, url)) return;
 
       if (url === "/api/state" && req.method === "GET") {
         const session = getSession("default");
