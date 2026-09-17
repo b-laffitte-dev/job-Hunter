@@ -28,12 +28,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Apple Silicon (M1/M2/M3/M4) — disponible et rapide
           - runner: macos-14
             arch: arm64
             asset_suffix: darwin-arm64
-          - runner: macos-13
-            arch: x64
-            asset_suffix: darwin-x64
+          # Intel — runner macos-13 a une disponibilité limitée sur GitHub Actions gratuit.
+          # Réactivez cette entrée si vous avez besoin du binaire Intel x64.
+          # - runner: macos-13
+          #   arch: x64
+          #   asset_suffix: darwin-x64
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
