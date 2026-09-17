@@ -145,4 +145,7 @@ jobs:
           files: job-hunter-ai-${{ matrix.asset_suffix }}.tar.gz
           generate_release_notes: true
           draft: false
-          prerelease: ${{ github.event_name == 'workflow_dispatch' }}
+          make_latest: "true"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: false
