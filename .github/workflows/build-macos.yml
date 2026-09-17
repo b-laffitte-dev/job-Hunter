@@ -77,15 +77,17 @@ jobs:
           cp "$NODE_BIN" dist/job-hunter-ai
           # Supprime la signature existante (nécessaire avant injection sur macOS)
           codesign --remove-signature dist/job-hunter-ai || true
-          # Injecte le blob SEA dans le binaire copié (postject syntaxe récente)
+          # Injecte le blob SEA dans le binaire copié (postject syntaxe récente + segment Mach-O explicite)
           npx --yes postject dist/job-hunter-ai NODE_SEA_BLOB dist/sea-prep.blob \
-            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2
+            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
+            --macho-segment-name NODE_SEA
 
       - name: Re-signe (ad-hoc) pour macOS
         run: |
           codesign --force --sign - dist/job-hunter-ai
-          # Vérification
           codesign --verify --verbose=2 dist/job-hunter-ai || true
+          # Vérifie l'architecture du binaire
+          file dist/job-hunter-ai
 
       - name: Test du binaire SEA
         run: |
