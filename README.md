@@ -12,6 +12,81 @@ Agent IA autonome de recherche d'emploi (TypeScript/Node) qui :
 
 ---
 
+## 👍 Installation grand public (macOS, sans connaissances techniques)
+
+Vous n'avez **pas besoin de savoir programmer**. Le logiciel est un binaire autonome (aucun Node.js à installer) pour Mac Apple Silicon (M1/M2/M3/M4).
+
+### Étape 1 — Installer le logiciel
+
+Ouvrez le **Terminal** (`Cmd+Espace` → tapez « Terminal ») et collez :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/b-laffitte-dev/job-Hunter/main/scripts/install-macos.sh | bash
+```
+
+Le script télécharge le binaire, l'installe dans `~/.local/bin/` et crée le dossier de configuration `~/.job-hunter-ai/`.
+
+> Si macOS affiche « *développeur non vérifié* », allez dans **Réglages Système → Confidentialité et sécurité** → « Autoriser quand même ».
+
+### Étape 2 — Rendre la commande accessible (une seule fois)
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Vérifiez : `job-hunter-ai --help` doit afficher l'aide.
+
+### Étape 3 — Renseigner votre clé IA (gratuite)
+
+1. Créez une clé gratuite sur [console.mistral.ai/api-keys](https://console.mistral.ai/api-keys) (cliquez « Create new key »).
+2. Ouvrez le fichier de configuration :
+
+```bash
+open -e ~/.job-hunter-ai/.env
+```
+
+3. Remplacez la ligne `LLM_API_KEY=your_mistral_api_key` par votre vraie clé, puis enregistrez (Cmd+S).
+
+### Étape 4 — Lancer
+
+```bash
+job-hunter-ai --serve
+```
+
+Ouvrez votre navigateur sur **http://127.0.0.1:3000** et discutez avec l'agent :
+- « *cherche secrétariat médico social à Lyon* »
+- « *seulement en CDI* »
+- « *lance la recherche* »
+
+Pour arrêter : `Ctrl+C` dans le Terminal. Les résultats sont dans `~/.job-hunter-ai/data/` (ouvrez-les avec `open ~/.job-hunter-ai`).
+
+### En 4 commandes
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/b-laffitte-dev/job-Hunter/main/scripts/install-macos.sh | bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+open -e ~/.job-hunter-ai/.env   # collez votre clé Mistral
+job-hunter-ai --serve
+```
+
+### Mac Intel (x64)
+
+Le binaire distribué est pour Apple Silicon. Pour un Mac Intel : menu  → « À propos de ce Mac » → ligne « Puce ». Si « Intel » apparaît, installez [Node.js 22+](https://nodejs.org/) puis :
+
+```bash
+git clone https://github.com/b-laffitte-dev/job-Hunter.git
+cd job-Hunter && npm install && npm run serve
+```
+
+> Une page d'installation HTML autonome est également disponible : 
+> - directement dans le dépôt : [INSTALLATION.html](https://github.com/b-laffitte-dev/job-Hunter/blob/main/INSTALLATION.html) (clic droit → « Enregistrer sous »), 
+> - ou en pièce jointe des [Releases](https://github.com/b-laffitte-dev/job-Hunter/releases) (fichier `INSTALLATION.html`).
+> 
+> Ouvrable dans tout navigateur, même hors connexion.
+
+---
+
 ## 🚀 Démarrage rapide
 
 ### 1. Pré-requis
