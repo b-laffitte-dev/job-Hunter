@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Installation de Job Hunter AI — Guide grand public (macOS)</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-strong: #f0f6fc;
+    --accent: #58a6ff;
+    --accent-soft: rgba(88, 166, 255, 0.12);
+    --code-bg: #1f242b;
+    --warn: #f0c36d;
+    --ok: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    font-size: 17px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+  header {
+    text-align: center;
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+  }
+  header h1 {
+    color: var(--text-strong);
+    font-size: 2.1rem;
+    margin: 0 0 8px;
+    letter-spacing: -0.02em;
+  }
+  header .sub {
+    color: var(--accent);
+    font-size: 1rem;
+    margin: 0;
+  }
+  header .badge {
+    display: inline-block;
+    margin-top: 14px;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.85rem;
+    color: var(--text);
+    background: var(--panel);
+  }
+  .intro {
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 36px;
+    color: var(--text-strong);
+  }
+  .intro p { margin: 0; }
+  section { margin-bottom: 44px; }
+  h2 {
+    color: var(--text-strong);
+    font-size: 1.5rem;
+    margin: 0 0 18px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2 .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #0d1117;
+    font-size: 1rem;
+    font-weight: 700;
+    flex: 0 0 auto;
+  }
+  h3 {
+    color: var(--text-strong);
+    font-size: 1.15rem;
+    margin: 24px 0 12px;
+  }
+  p { margin: 0 0 14px; }
+  ol, ul { padding-left: 24px; margin: 0 0 14px; }
+  li { margin-bottom: 8px; }
+  code {
+    font-family: "SF Mono", "Fira Code", Consolas, Monaco, monospace;
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-size: 0.92em;
+    color: var(--text-strong);
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 14px 0;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    color: var(--text);
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  pre .prompt { color: var(--accent); user-select: none; }
+  .note {
+    background: var(--panel);
+    border-left: 3px solid var(--warn);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: 0.95rem;
+  }
+  .note.ok { border-left-color: var(--ok); }
+  .note strong { color: var(--text-strong); }
+  .copy {
+    float: right;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 2px 10px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .copy:hover { color: var(--text-strong); border-color: var(--accent); }
+  .copy.copied { color: var(--ok); border-color: var(--ok); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.95rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { background: var(--panel); color: var(--text-strong); }
+  td:first-child { white-space: nowrap; color: var(--accent); font-family: monospace; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .quick {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 26px;
+  }
+  .quick h3 { margin-top: 0; }
+  .quick pre { margin: 10px 0; }
+  footer {
+    text-align: center;
+    margin-top: 56px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: #8b949e;
+    font-size: 0.85rem;
+  }
+  .chat-examples { list-style: none; padding: 0; }
+  .chat-examples li {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    font-style: italic;
+  }
+  .chat-examples li::before { content: "💬 "; font-style: normal; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>🐗 Job Hunter AI</h1>
+    <p class="sub">Installation grand public — macOS Apple Silicon</p>
+    <span class="badge">Aucune compétence en programmation requise</span>
+  </header>
+
+  <div class="intro">
+    <p>👉 Ce guide s'adresse à une <strong>personne lambda</strong>. Vous n'avez besoin d'aucun logiciel préalable
+    (pas de Node.js, pas d'éditeur de code). Le programme est un <strong>binaire autonome</strong> qui fonctionne
+    directement sur votre Mac (M1, M2, M3 ou M4). Suivez les 4 étapes ci-dessous dans l'ordre.</p>
+  </div>
+
+  <section>
+    <h2><span class="num">1</span> Installer le logiciel</h2>
+    <p>Ouvrez le <strong>Terminal</strong> : appuyez sur <code>Cmd + Espace</code>, tapez « Terminal » et appuyez sur Entrée.</p>
+    <p>Copiez-collez ensuite cette ligne (tout en un seul bloc) puis appuyez sur Entrée :</p>
+    <pre><button class="copy" onclick="copyCode(this)">Copier</button><code><span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/b-laffitte-dev/job-Hunter/main/scripts/install-macos.sh | bash</code></pre>
+    <p>Le script télécharge le programme, l'installe dans <code>~/.local/bin/</code> et crée le dossier de
+    configuration <code>~/.job-hunter-ai/</code> avec un fichier <code>.env</code> et un <code>config.json</code>.
+    Vos données ne sont pas écrasées si vous réinstallez.</p>
+    <div class="note">
+      <strong>macOS bloque le programme ?</strong> Si un message « développeur non vérifié » apparaît, ouvrez
+      <strong>Réglages Système → Confidentialité et sécurité</strong> et cliquez sur « Autoriser quand même ».
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">2</span> Rendre la commande accessible (une seule fois)</h2>
+    <p>Pour pouvoir lancer le logiciel depuis n'importe où, ajoutez son emplacement à votre PATH :</p>
+    <pre><button class="copy" onclick="copyCode(this)">Copier</button><code><span class="prompt">$</span> echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+<span class="prompt">$</span> source ~/.zshrc</code></pre>
+    <p>Vérifiez que ça fonctionne — cette commande doit afficher l'aide :</p>
+    <pre><button class="copy" onclick="copyCode(this)">Copier</button><code><span class="prompt">$</span> job-hunter-ai --help</code></pre>
+    <div class="note ok">Si vous voyez l'aide s'afficher, cette étape est réussie ✅. Vous ne devrez plus jamais la refaire.</div>
+  </section>
+
+  <section>
+    <h2><span class="num">3</span> Renseigner votre clé IA (gratuite)</h2>
+    <p>L'agent utilise une IA pour générer des mots-clés et classer les offres. La clé est gratuite.</p>
+    <ol>
+      <li>Allez sur <a href="https://console.mistral.ai/api-keys" target="_blank" rel="noopener">console.mistral.ai/api-keys</a>, créez un compte si besoin, puis cliquez sur « <strong>Create new key</strong> ». Copiez la clé qui s'affiche (elle ne sera plus visible ensuite).</li>
+      <li>Ouvrez le fichier de configuration dans un éditeur de texte :</li>
+    </ol>
+    <pre><button class="copy" onclick="copyCode(this)">Copier</button><code><span class="prompt">$</span> open -e ~/.job-hunter-ai/.env</code></pre>
+    <p>3. Remplacez la ligne <code>LLM_API_KEY=your_mistral_api_key</code> par votre vraie clé, par exemple :</p>
+    <pre><code>LLM_API_KEY=abc123VotreCleCopiee456def</code></pre>
+    <p>4. Enregistrez le fichier (<code>Cmd+S</code>) puis fermez la fenêtre.</p>
+    <div class="note"><strong>Astuce :</strong> pour France Travail (optionnel), vous pouvez aussi renseigner
+    <code>FT_CLIENT_ID</code> et <code>FT_CLIENT_SECRET</code> (à demander sur
+    <a href="https://pole-emploi.io/" target="_blank" rel="noopener">pole-emploi.io</a>). Sans cela, France Travail est
+    simplement ignoré, les autres sources restent actives.</div>
+  </section>
+
+  <section>
+    <h2><span class="num">4</span> Lancer et discuter avec l'agent</h2>
+    <p>Dans le Terminal :</p>
+    <pre><button class="copy" onclick="copyCode(this)">Copier</button><code><span class="prompt">$</span> job-hunter-ai --serve</code></pre>
+    <p>Ouvrez votre navigateur sur <a href="http://127.0.0.1:3000" target="_blank" rel="noopener">http://127.0.0.1:3000</a>
+    et discutez avec l'agent, par exemple :</p>
+    <ul class="chat-examples">
+      <li>cherche secrétariat médico social à Lyon</li>
+      <li>seulement en CDI</li>
+      <li>lance la recherche</li>
+    </ul>
+    <p>Pour <strong>arrêter</strong> : appuyez sur <code>Ctrl+C</code> dans le Terminal.</p>
+    <p>Les résultats sont sauvegardés dans <code>~/.job-hunter-ai/data/</code>. Pour les consulter dans le Finder :</p>
+    <pre><button class="copy" onclick="copyCode(this)">Copier</button><code><span class="prompt">$</span> open ~/.job-hunter-ai</code></pre>
+  </section>
+
+  <section class="quick">
+    <h3>⚡ En résumé — 4 commandes</h3>
+    <pre><code><span class="prompt">$</span> curl -fsSL https://raw.githubusercontent.com/b-laffitte-dev/job-Hunter/main/scripts/install-macos.sh | bash
+<span class="prompt">$</span> echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+<span class="prompt">$</span> open -e ~/.job-hunter-ai/.env   # collez votre clé Mistral, puis Cmd+S
+<span class="prompt">$</span> job-hunter-ai --serve</code></pre>
+    <p>Puis ouvrez <a href="http://127.0.0.1:3000" target="_blank" rel="noopener">http://127.0.0.1:3000</a>.</p>
+  </section>
+
+  <section>
+    <h2>🍎 Mac Intel (x64)</h2>
+    <p>Le binaire distribué est conçu pour Apple Silicon. Pour savoir quelle puce vous avez : menu
+    <strong>  → À propos de ce Mac → ligne « Puce »</strong>.</p>
+    <p>Si « <strong>Intel</strong> » apparaît, installez d'abord <a href="https://nodejs.org/" target="_blank" rel="noopener">Node.js 22+</a>, puis :</p>
+    <pre><button class="copy" onclick="copyCode(this)">Copier</button><code><span class="prompt">$</span> git clone https://github.com/b-laffitte-dev/job-Hunter.git
+<span class="prompt">$</span> cd job-Hunter && npm install && npm run serve</code></pre>
+  </section>
+
+  <section>
+    <h2>🛟 En cas de souci</h2>
+    <table>
+      <thead><tr><th>Symptôme</th><th>Solution</th></tr></thead>
+      <tbody>
+        <tr><td>command not found</td><td>Refaites l'étape 2, puis ouvrez un nouveau Terminal.</td></tr>
+        <tr><td>développeur non vérifié</td><td>Réglages Système → Confidentialité et sécurité → « Autoriser quand même ».</td></tr>
+        <tr><td>page ne s'ouvre pas</td><td>Vérifiez que <code>job-hunter-ai --serve</code> tourne et qu'il affiche l'URL <code>http://127.0.0.1:3000</code>.</td></tr>
+        <tr><td>erreur clé IA</td><td>Éditez <code>~/.job-hunter-ai/.env</code> et vérifiez <code>LLM_API_KEY=</code> sans espace autour du <code>=</code>.</td></tr>
+        <tr><td>réinstallation</td><td>Relancez le <code>curl ... | bash</code> ; votre config et vos données sont conservées.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    Job Hunter AI — <a href="https://github.com/b-laffitte-dev/job-Hunter" target="_blank" rel="noopener">github.com/b-laffitte-dev/job-Hunter</a><br>
+    Cette page est autonome : ouvrez-la dans n'importe quel navigateur, même hors connexion.
+  </footer>
+
+</div>
+
+<script>
+function copyCode(btn) {
+  const code = btn.parentElement.querySelector('code');
+  const text = code.innerText.replace(/^\$\s*/gm, '').replace(/\n/g, '\n');
+  navigator.clipboard.writeText(text.replace(/^\$\s*/gm, '')).then(function(){
+    btn.textContent = 'Copié ✓';
+    btn.classList.add('copied');
+    setTimeout(function(){ btn.textContent = 'Copier'; btn.classList.remove('copied'); }, 1500);
+  });
+}
+</script>
+</body>
+</html>
