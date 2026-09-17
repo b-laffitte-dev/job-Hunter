@@ -1,0 +1,148 @@
+name: build-macos-package
+
+on:
+  push:
+    tags:
+      - "v*"
+  pull_request:
+    paths:
+      - ".github/workflows/build-macos.yml"
+      - "src/**"
+      - "public/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (ex: 0.1.0)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Apple Silicon (M1/M2/M3/M4) — disponible et rapide
+          - runner: macos-14
+            arch: arm64
+            asset_suffix: darwin-arm64
+          # Intel — runner macos-13 a une disponibilité limitée sur GitHub Actions gratuit.
+          # Réactivez cette entrée si vous avez besoin du binaire Intel x64.
+          # - runner: macos-13
+          #   arch: x64
+          #   asset_suffix: darwin-x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          check-latest: true
+
+      - name: Install dependencies
+        run: npm ci || npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Bundle (esbuild → CJS)
+        run: npm run bundle
+
+      - name: Test bundle runs
+        run: node dist/job-hunter-ai.cjs --help
+
+      - name: Build Single Executable Application (SEA)
+        run: |
+          set -e
+          # sea-config.json décrit l'injection du blob dans le binaire node
+          cat > sea-config.json <<'EOF'
+          {
+            "main": "dist/job-hunter-ai.cjs",
+            "output": "dist/sea-prep.blob",
+            "disableExperimentalSeaWarning": true
+          }
+          EOF
+          # Génère le blob à injecter
+          node --experimental-sea-config sea-config.json
+          # Récupère le chemin du binaire node de la version utilisée
+          NODE_BIN=$(node -p "process.execPath")
+          echo "Node binary: $NODE_BIN"
+          # Copie le binaire node sous le nom final
+          cp "$NODE_BIN" dist/job-hunter-ai
+          # Supprime la signature existante (nécessaire avant injection sur macOS)
+          codesign --remove-signature dist/job-hunter-ai || true
+          # Injecte le blob SEA dans le binaire copié (postject syntaxe récente + segment Mach-O explicite)
+          npx --yes postject dist/job-hunter-ai NODE_SEA_BLOB dist/sea-prep.blob \
+            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
+            --macho-segment-name NODE_SEA
+
+      - name: Re-signe (ad-hoc) pour macOS
+        run: |
+          codesign --force --sign - dist/job-hunter-ai
+          codesign --verify --verbose=2 dist/job-hunter-ai || true
+          # Vérifie l'architecture du binaire
+          file dist/job-hunter-ai
+
+      - name: Test du binaire SEA
+        run: |
+          chmod +x dist/job-hunter-ai
+          ./dist/job-hunter-ai --help
+
+      - name: Package en tar.gz
+        run: |
+          mkdir -p staging
+          cp dist/job-hunter-ai staging/job-hunter-ai
+          cp scripts/install-macos.sh staging/install.sh
+          chmod +x staging/job-hunter-ai staging/install.sh
+          cat > staging/README.txt <<'EOF'
+          Job Hunter AI - binaire macOS autonome
+          =====================================
+          Installation rapide:
+            ./install.sh
+          Ou manuel:
+            cp job-hunter-ai ~/.local/bin/  (ou /usr/local/bin avec sudo)
+            chmod +x ~/.local/bin/job-hunter-ai
+            job-hunter-ai --serve   # interface de chat sur http://127.0.0.1:3000
+          Configuration: ~/.job-hunter-ai/.env et ~/.job-hunter-ai/config.json
+          EOF
+          ARCH="${{ matrix.asset_suffix }}"
+          tar -czf "job-hunter-ai-${ARCH}.tar.gz" -C staging .
+          ls -lh "job-hunter-ai-${ARCH}.tar.gz"
+
+      - name: Détermine le tag de release
+        id: reltag
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.version }}" ]]; then
+            echo "tag=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=v0.0.0-dev-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-hunter-ai-${{ matrix.asset_suffix }}
+          path: job-hunter-ai-${{ matrix.asset_suffix }}.tar.gz
+
+      - name: Crée/Met à jour la release GitHub
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.reltag.outputs.tag }}
+          name: Job Hunter AI ${{ steps.reltag.outputs.tag }}
+          files: job-hunter-ai-${{ matrix.asset_suffix }}.tar.gz
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ github.event_name == 'workflow_dispatch' }}

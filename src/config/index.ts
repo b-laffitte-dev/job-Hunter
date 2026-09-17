@@ -3,7 +3,16 @@ import { resolve } from "node:path";
 import dotenv from "dotenv";
 import { z } from "zod";
 import type { AppConfig } from "../types/index.js";
+import { resolveResource, ensureHomeDir } from "../paths.js";
 
+// Charge .env depuis $HOME/.job-hunter-ai/.env puis depuis le cwd (fallback)
+ensureHomeDir();
+try {
+  const homeEnv = resolveResource(".env");
+  dotenv.config({ path: homeEnv });
+} catch {
+  // ignore si absent
+}
 dotenv.config();
 
 const EnvSchema = z.object({
@@ -67,13 +76,17 @@ const ConfigSchema = z.object({
 
 export function loadConfig(path?: string): AppConfig {
   const env = loadEnv();
-  const cfgPath = resolve(path ?? env.CONFIG_PATH);
+  // Ordre de résolution : chemin explicite > $HOME/.job-hunter-ai/config.json > CONFIG_PATH > ./config/config.json
+  const cfgPath = path
+    ? resolve(path)
+    : resolveResource("config.json", env.CONFIG_PATH);
   let raw: string;
   try {
     raw = readFileSync(cfgPath, "utf-8");
   } catch {
+    const home = resolve(".job-hunter-ai", "config.json");
     throw new Error(
-      `Configuration introuvable: ${cfgPath}. Copiez config/config.example.json vers ${cfgPath}.`,
+      `Configuration introuvable: ${cfgPath}. Créez ~/.job-hunter-ai/config.json (voir config/config.example.json) ou passez --config <path>.`,
     );
   }
   const json = JSON.parse(raw);

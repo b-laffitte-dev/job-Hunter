@@ -8,3 +8,9 @@ data/*.csv
 !data/.gitkeep
 .DS_Store
 coverage/
+
+# Build SEA intermédiaires
+sea-config.json
+*.blob
+staging/
+job-hunter-ai-darwin-*.tar.gz

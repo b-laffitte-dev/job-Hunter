@@ -8,13 +8,15 @@
     "job-hunter-ai": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "npm run gen:ui && tsc",
+    "bundle": "npm run gen:ui && esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/job-hunter-ai.cjs --external:puppeteer",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "run:once": "tsx src/index.ts --once",
     "serve": "tsx src/index.ts --serve",
     "serve:prod": "node dist/index.js --serve",
     "typecheck": "tsc --noEmit",
+    "gen:ui": "node scripts/gen-ui-assets.mjs",
     "format": "prettier --write \"src/**/*.ts\""
   },
   "keywords": [
@@ -42,6 +44,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^6.4.16",
     "@types/ws": "^8.5.12",
+    "esbuild": "^0.24.0",
     "prettier": "^3.3.3",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4"

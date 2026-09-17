@@ -13,6 +13,7 @@ import {
   toCSV,
 } from "./storage/store.js";
 import { ensureDir } from "./storage/fs.js";
+import { resolveDataDir, ensureHomeDir } from "./paths.js";
 import { resolve } from "node:path";
 import { writeFileSync } from "node:fs";
 import type { AppConfig, JobOffer, ScoredJob } from "./types/index.js";
@@ -71,9 +72,11 @@ export async function runWithConfig(config: AppConfig): Promise<RunResult> {
   if (scored.length > 0) {
     saveLatest(scored);
     const archivePath = archiveRun(scored, runId);
-    // Export CSV du run
-    ensureDir(resolve("data"));
-    const csvPath = resolve("data", `run-${runId}.csv`);
+    // Export CSV du run (dans $HOME/.job-hunter-ai/data)
+    ensureHomeDir();
+    const dataDir = resolveDataDir();
+    ensureDir(dataDir);
+    const csvPath = resolve(dataDir, `run-${runId}.csv`);
     writeFileSync(csvPath, toCSV(scored), "utf-8");
     console.log(`[store] archivé: ${archivePath} (csv: ${csvPath})`);
 
