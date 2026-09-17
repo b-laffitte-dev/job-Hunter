@@ -12,6 +12,8 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "run:once": "tsx src/index.ts --once",
+    "serve": "tsx src/index.ts --serve",
+    "serve:prod": "node dist/index.js --serve",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.ts\""
   },
@@ -32,12 +34,14 @@
     "nodemailer": "^6.9.15",
     "puppeteer": "^23.4.0",
     "undici": "^6.20.0",
+    "ws": "^8.18.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^22.5.0",
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^6.4.16",
+    "@types/ws": "^8.5.12",
     "prettier": "^3.3.3",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4"

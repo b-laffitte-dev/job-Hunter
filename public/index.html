@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job Hunter AI — Chat</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>🤖 Job Hunter AI</h1>
+      <p class="subtitle">Affinez votre recherche d'emploi par la conversation</p>
+    </header>
+
+    <main>
+      <section class="panel chat-panel">
+        <div id="chat" class="chat" aria-live="polite"></div>
+        <form id="composer" class="composer">
+          <input
+            id="msg"
+            type="text"
+            placeholder="Ex : cherche secrétariat médico social à Lyon en CDI"
+            autocomplete="off"
+            autofocus
+          />
+          <button type="submit" id="send">Envoyer</button>
+        </form>
+        <div id="status" class="status"></div>
+      </section>
+
+      <aside class="panel side-panel">
+        <details open>
+          <summary>📋 Critères de recherche</summary>
+          <pre id="state" class="state"></pre>
+        </details>
+        <details open>
+          <summary>💼 Offres trouvées (<span id="count">0</span>)</summary>
+          <div id="jobs" class="jobs"></div>
+        </details>
+      </aside>
+    </main>
+
+    <footer>
+      <small>Job Hunter AI — interface de chat · WebSocket <code>/chat</code> · REST <code>/api/run</code></small>
+    </footer>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
