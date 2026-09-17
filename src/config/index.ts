@@ -22,6 +22,8 @@ const EnvSchema = z.object({
   CRON_SCHEDULE: z.string().default("0 8 * * *"),
   ENABLE_PUPPETEER: z.boolean({ coerce: true }).default(false),
   CONFIG_PATH: z.string().default("config/config.json"),
+  SERVE_PORT: z.coerce.number().default(3000),
+  SERVE_HOST: z.string().default("127.0.0.1"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

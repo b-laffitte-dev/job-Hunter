@@ -49,6 +49,16 @@ export function saveLatest(offers: ScoredJob[]): void {
   writeFileSync(LATEST_PATH, JSON.stringify(offers, null, 2), "utf-8");
 }
 
+export function loadLatest(): ScoredJob[] {
+  ensureDir(DATA_DIR);
+  if (!existsSync(LATEST_PATH)) return [];
+  try {
+    return JSON.parse(readFileSync(LATEST_PATH, "utf-8")) as ScoredJob[];
+  } catch {
+    return [];
+  }
+}
+
 export function archiveRun(offers: ScoredJob[], runId: string): string {
   ensureDir(HISTORY_DIR);
   const path = resolve(HISTORY_DIR, `run-${runId}.json`);

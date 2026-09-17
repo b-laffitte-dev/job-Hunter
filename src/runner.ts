@@ -15,7 +15,7 @@ import {
 import { ensureDir } from "./storage/fs.js";
 import { resolve } from "node:path";
 import { writeFileSync } from "node:fs";
-import type { JobOffer, ScoredJob } from "./types/index.js";
+import type { AppConfig, JobOffer, ScoredJob } from "./types/index.js";
 
 export interface RunResult {
   runId: string;
@@ -28,6 +28,10 @@ export interface RunResult {
 
 export async function runOnce(configPath?: string): Promise<RunResult> {
   const config = loadConfig(configPath);
+  return runWithConfig(config);
+}
+
+export async function runWithConfig(config: AppConfig): Promise<RunResult> {
   const runId = new Date().toISOString().replace(/[:.]/g, "-");
 
   console.log(`\n=== Job Hunter AI - run ${runId} ===`);

@@ -85,9 +85,49 @@ npm run run:once
 # Lancer le planificateur (tourne selon CRON_SCHEDULE)
 npm start
 
+# Interface de chat web (affiner la recherche par la conversation)
+npm run serve
+
 # Mode développement (tsx)
 npm run dev
 ```
+
+---
+
+## 💬 Interface de chat
+
+Le serveur web (`npm run serve`) expose une UI conversationnelle pour **lancer et affiner les recherches en langage naturel**.
+
+- Ouvrez `http://127.0.0.1:3000` (ou `SERVE_PORT`) dans votre navigateur.
+- Discutez avec l'agent : chaque message est interprété par le LLM pour mettre à jour les critères (requête, lieu, contrat, salaire, exclusions…) ou déclencher une recherche.
+- Le panneau latéral affiche en temps réel les critères courants et les offres scorées.
+
+Exemples de messages :
+
+- « cherche secrétariat médico social à Lyon » → met à jour la requête et le lieu
+- « seulement en CDI » → ajoute la contrainte de contrat
+- « exclue les offres commerciales » → ajoute une exclusion
+- « lance la recherche » → exécute le pipeline complet (scraping + scoring) et affiche les résultats
+- « réinitialise » → revient aux critères de la configuration
+
+### API du serveur
+
+| Méthode | Route | Rôle |
+|---|---|---|
+| GET | `/` | UI web statique (chat + résultats) |
+| WS | `/chat` | Conversation temps réel (envoi de messages, reception état + résultats) |
+| GET | `/api/state` | Critères de recherche courants (session `default`) |
+| GET | `/api/latest` | Dernières offres scorées (`data/latest.json`) |
+| POST | `/api/run` | Lance un run (`{sessionId?, state?}`) |
+
+### Variables d'environnement (interface)
+
+| Variable | Rôle |
+|---|---|
+| `SERVE_PORT` | Port HTTP (défaut `3000`) |
+| `SERVE_HOST` | Hôte bind (défaut `127.0.0.1` — local only) |
+
+Le serveur gère des sessions isolées (via `?sessionId=...` sur le WebSocket) : chaque session conserve son état de recherche et son historique de conversation.
 
 ---
 
@@ -115,13 +155,15 @@ job-hunter-ai/
 ├── src/
 │   ├── config/         # chargement .env + config.json (validés par zod)
 │   ├── scrapers/       # francetravail, indeed, leboncoin, generic, http
-│   ├── llm/            # client OpenAI-compat, keywords, scoring
+│   ├── llm/            # client OpenAI-compat, keywords, scoring, chat
 │   ├── notifier/       # email (nodemailer)
 │   ├── scheduler/      # cron (node-cron)
+│   ├── server.ts       # serveur HTTP/WS + UI chat
 │   ├── storage/        # historique, doublons, CSV
 │   ├── types/          # interfaces partagées
 │   ├── runner.ts       # orchestration du pipeline
 │   └── index.ts        # CLI (commander)
+├── public/             # UI web statique (index.html, app.js, style.css)
 ├── config/config.example.json
 ├── data/               # historique des runs (gitignoré sauf .gitkeep)
 ├── .env.example
