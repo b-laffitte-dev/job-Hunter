@@ -79,7 +79,11 @@ git clone https://github.com/b-laffitte-dev/job-Hunter.git
 cd job-Hunter && npm install && npm run serve
 ```
 
-> Une page d'installation HTML autonome est également disponible dans les [Releases](https://github.com/b-laffitte-dev/job-Hunter/releases) (fichier `INSTALLATION.html`, ouvrable dans tout navigateur).
+> Une page d'installation HTML autonome est également disponible : 
+> - directement dans le dépôt : [INSTALLATION.html](https://github.com/b-laffitte-dev/job-Hunter/blob/main/INSTALLATION.html) (clic droit → « Enregistrer sous »), 
+> - ou en pièce jointe des [Releases](https://github.com/b-laffitte-dev/job-Hunter/releases) (fichier `INSTALLATION.html`).
+> 
+> Ouvrable dans tout navigateur, même hors connexion.
 
 ---
 
