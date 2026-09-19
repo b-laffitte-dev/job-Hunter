@@ -284,9 +284,11 @@ export async function searchJobs(query: string, location?: string): Promise<Agen
   
   try {
     const conversation = await startConversation(
-      `Trouve des offres d'emploi pour: ${searchQuery}. ` +
+      `Trouve des offres d'emploi ACTUELLES pour: ${searchQuery}. ` +
+      `IMPORTANT: Pour CHAQUE offre, trouve l'URL DIRECTE vers l'annonce (pas une page de recherche générique). ` +
       `Formate les résultats en JSON avec les champs: titre, entreprise, lieu, url, description, typeContrat, salaire. ` +
-      `Inclus toutes les références/URLs sources. Réponds en français.`
+      `Inclus toutes les références/URLs sources dans un tableau "sources". ` +
+      `VERIFIE que chaque URL est valide et accessible. Réponds UNIQUEMENT en français.`
     );
 
     console.log(`[llm/client] Attente de 5 secondes pour le traitement Mistral...`);
@@ -353,6 +355,43 @@ export async function searchJobs(query: string, location?: string): Promise<Agen
   }
 }
 
+// Validate if a URL is likely valid (basic check)
+function isValidUrl(url: string): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    // Check for common invalid patterns
+    const invalidPatterns = [
+      /jk=abc/,       // Fake Indeed job keys
+      /jk=123/,       // Fake Indeed job keys
+      /job\?id=0/,     // Fake job IDs
+      /null/,         // Null values
+      /undefined/,     // Undefined values
+    ];
+    
+    if (invalidPatterns.some(p => p.test(url))) {
+      return false;
+    }
+    
+    // Check for valid domains
+    const validDomains = [
+      'indeed.com', 'fr.indeed.com',
+      'glassdoor.fr', 'glassdoor.com',
+      'apec.fr', 'pole-emploi.fr',
+      'welcometothejungle.com',
+      'linkedin.com',
+      'monster.fr', 'jobijoba.com',
+      'regionjob.com', 'cadreemploi.fr',
+      'hellowork.com', 'qapa.fr',
+    ];
+    
+    const hostname = parsed.hostname || '';
+    return validDomains.some(d => hostname.includes(d));
+  } catch {
+    return false;
+  }
+}
+
 function extractJobResults(text: string, query: string, references: string[]): JobResult[] {
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   let jsonContent = jsonMatch ? jsonMatch[1] : text;
@@ -362,8 +401,10 @@ function extractJobResults(text: string, query: string, references: string[]): J
 
   try {
     const parsed = JSON.parse(jsonContent);
-    if (Array.isArray(parsed)) {
-      return parsed.map((item: any) => ({
+    
+    // Helper to create job result with URL validation
+    const createJobResult = (item: any): JobResult | null => {
+      const job: JobResult = {
         title: item.title || item.titre || query,
         company: item.company || item.entreprise,
         location: item.location || item.lieu,
@@ -372,20 +413,54 @@ function extractJobResults(text: string, query: string, references: string[]): J
         contractType: item.contractType || item.typeContrat || undefined,
         salary: item.salary || item.salaire || undefined,
         source: item.source || "Mistral Web Search",
-      }));
+      };
+      // Only return if URL is valid or if there's no URL (we'll use references)
+      return job;
+    };
+    
+    // Extract sources if available (from the assistant's response)
+    const sources = (parsed as any).sources || references;
+    
+    if (Array.isArray(parsed)) {
+      const results = parsed.map(createJobResult).filter(Boolean) as JobResult[];
+      // If no valid URLs found, use sources from the JSON
+      if (results.every(r => !isValidUrl(r.url)) && sources && sources.length > 0) {
+        return sources.map((src: string) => ({
+          title: query,
+          url: src,
+          description: `Offre depuis: ${src}`,
+          source: "Mistral Web Search",
+        }));
+      }
+      return results;
     }
     if (parsed.jobs && Array.isArray(parsed.jobs)) {
-      return parsed.jobs.map((item: any) => ({
-        title: item.title || item.titre || query,
-        company: item.company || item.entreprise,
-        location: item.location || item.lieu,
-        url: item.url || "",
-        description: item.description || "",
-        contractType: item.contractType || item.typeContrat || undefined,
-        salary: item.salary || item.salaire || undefined,
-        source: item.source || "Mistral Web Search",
-      }));
+      const results = parsed.jobs.map(createJobResult).filter(Boolean) as JobResult[];
+      // If no valid URLs found, use sources from the JSON
+      if (results.every(r => !isValidUrl(r.url)) && sources && sources.length > 0) {
+        return sources.map((src: string) => ({
+          title: query,
+          url: src,
+          description: `Offre depuis: ${src}`,
+          source: "Mistral Web Search",
+        }));
+      }
+      return results;
     }
+    if (parsed.offres && Array.isArray(parsed.offres)) {
+      const results = parsed.offres.map(createJobResult).filter(Boolean) as JobResult[];
+      // If no valid URLs found, use sources from the JSON
+      if (results.every(r => !isValidUrl(r.url)) && sources && sources.length > 0) {
+        return sources.map((src: string) => ({
+          title: query,
+          url: src,
+          description: `Offre depuis: ${src}`,
+          source: "Mistral Web Search",
+        }));
+      }
+      return results;
+    }
+    
     return [{
       title: query,
       url: references[0] || "",
