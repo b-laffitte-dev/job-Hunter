@@ -78,7 +78,7 @@ function updateAgentConfigInputs(agentConfig) {
   
   if (inputs.maxLlmCalls) inputs.maxLlmCalls.value = agentConfig.maxLlmCalls ?? 20;
   if (inputs.maxTokens) inputs.maxTokens.value = agentConfig.maxTokens ?? 50000;
-  if (inputs.maxSteps) inputs.maxSteps.value = agentConfig.maxSteps ?? 10;
+  if (inputs.maxSteps) inputs.maxSteps.value = agentConfig.maxSteps ?? 30;
   if (inputs.satisfactionThreshold) inputs.satisfactionThreshold.value = agentConfig.satisfactionThreshold ?? 80;
   if (inputs.autoExtract) inputs.autoExtract.value = String(agentConfig.autoExtract ?? true);
   if (inputs.maxUrlsPerSearch) inputs.maxUrlsPerSearch.value = agentConfig.maxUrlsPerSearch ?? 2;
