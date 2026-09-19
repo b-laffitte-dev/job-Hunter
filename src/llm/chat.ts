@@ -47,8 +47,9 @@ Règles:
 - Laisse null les champs non modifiés
 - Pour les nombres, utilise des entiers
 - Sois précis et ne devine pas les intentions de l'utilisateur
-- Si l'utilisateur demande directement de chercher/trouver/lancer une recherche, utilise "search"
+- Si l'utilisateur demande directement de chercher/trouver/lancer une recherche (avec des mots comme "cherche", "recherche", "trouve", "trouver", "lance", "lancer", "go"), utilise "search"
 - Si l'utilisateur modifie des critères sans demander de recherche, utilise "update"
+- Pour une simple confirmation comme "oui", "ok", "d'accord" sans contexte de recherche explicite, utilise "answer" avec une réponse de confirmation
 
 Format de la réponse (UNIQUEMENT JSON) :
 {

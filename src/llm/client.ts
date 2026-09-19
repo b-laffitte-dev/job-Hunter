@@ -276,6 +276,42 @@ export async function getConversationMessages(conversationId: string): Promise<M
 }
 
 /**
+ * Extraire le contenu JSON d'un texte, même s'il est imbriqué dans des blocs markdown
+ */
+function extractJsonContent(text: string): string | null {
+  // Essayer de trouver un bloc ```json d'abord
+  const jsonBlockMatch = text.match(/```json\s*([\s\S]*?)```/);
+  if (jsonBlockMatch) {
+    return jsonBlockMatch[1];
+  }
+  
+  // Essayer de trouver un bloc entre ```markdown ... ```markdown
+  const markdownBlockMatch = text.match(/```markdown\s*([\s\S]*?)```/);
+  if (markdownBlockMatch) {
+    const innerContent = markdownBlockMatch[1];
+    // Extraire le JSON de l'intérieur du bloc markdown
+    const innerJsonMatch = innerContent.match(/```json\s*([\s\S]*?)```/);
+    if (innerJsonMatch) {
+      return innerJsonMatch[1];
+    }
+    // Si pas de bloc json explicite, essayer de trouver du JSON dans le contenu
+    const jsonInMarkdown = innerContent.match(/\{[^\}]*\}/s) || innerContent.match(/\\[[^\\]]*\\]/s);
+    if (jsonInMarkdown) {
+      return jsonInMarkdown[0];
+    }
+  }
+  
+  // Essayer de trouver n'importe quel bloc ```...```
+  const anyBlockMatch = text.match(/```\s*([\s\S]*?)```/);
+  if (anyBlockMatch) {
+    return anyBlockMatch[1];
+  }
+  
+  // Pas de bloc trouvé, retourner null
+  return null;
+}
+
+/**
  * Effectue une recherche via l'agent Mistral avec capacité web_search
  */
 export async function searchJobs(query: string, location?: string): Promise<AgentSearchResult> {
@@ -309,11 +345,11 @@ export async function searchJobs(query: string, location?: string): Promise<Agen
     // Extract references from the JSON content (Mistral Conversations API doesn't provide toolReference)
     let references: string[] = [];
     try {
-      const jsonMatch = textContent.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonMatch) {
-        let jsonContent = jsonMatch[1];
+      // First, try to extract JSON block directly
+      let jsonContent = extractJsonContent(textContent);
+      
+      if (jsonContent) {
         // The API response has escaped quotes (\" -> "), we need to unescape them
-        // Replace escaped quotes first
         jsonContent = jsonContent.replace(/\\"/g, '"').replace(/\\'/g, "'").replace(/\\n/g, '\n');
         const parsed = JSON.parse(jsonContent);
         // Extract sources from the JSON (can be 'sources' or 'references' field)
@@ -356,24 +392,12 @@ export async function searchJobs(query: string, location?: string): Promise<Agen
 }
 
 // Validate if a URL is likely valid (basic check)
-function isValidUrl(url: string): boolean {
+export function isValidUrl(url: string): boolean {
   if (!url) return false;
   try {
     const parsed = new URL(url);
-    // Check for common invalid patterns
-    const invalidPatterns = [
-      /jk=abc/,       // Fake Indeed job keys
-      /jk=123/,       // Fake Indeed job keys
-      /job\?id=0/,     // Fake job IDs
-      /null/,         // Null values
-      /undefined/,     // Undefined values
-    ];
     
-    if (invalidPatterns.some(p => p.test(url))) {
-      return false;
-    }
-    
-    // Check for valid domains
+    // Check for valid domains first
     const validDomains = [
       'indeed.com', 'fr.indeed.com',
       'glassdoor.fr', 'glassdoor.com',
@@ -386,21 +410,49 @@ function isValidUrl(url: string): boolean {
     ];
     
     const hostname = parsed.hostname || '';
-    return validDomains.some(d => hostname.includes(d));
+    const isValidDomain = validDomains.some(d => hostname.includes(d));
+    
+    if (!isValidDomain) {
+      return false;
+    }
+    
+    // Check for common invalid patterns (only if domain is valid)
+    const invalidPatterns = [
+      /jk=abc[^0-9]/,    // Fake Indeed job keys like jk=abc123def
+      /jk=[^0-9]+[^a-zA-Z]/, // Non-numeric, non-alphanumeric patterns
+      /job\?id=0[^0-9]/, // Fake job IDs starting with 0
+      /\/null\//,        // Null in path
+      /\/undefined\//,   // Undefined in path
+    ];
+    
+    if (invalidPatterns.some(p => p.test(url))) {
+      return false;
+    }
+    
+    return true;
   } catch {
     return false;
   }
 }
 
-function extractJobResults(text: string, query: string, references: string[]): JobResult[] {
-  const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  let jsonContent = jsonMatch ? jsonMatch[1] : text;
+export function extractJobResults(text: string, query: string, references: string[]): JobResult[] {
+  // Extract JSON content using the helper function
+  let jsonContent = extractJsonContent(text);
+  
+  // If no JSON block found, use the entire text
+  if (!jsonContent) {
+    jsonContent = text;
+  }
 
   // Clean up escaped characters from the API response
   jsonContent = jsonContent.replace(/\\"/g, '"').replace(/\\'/g, "'").replace(/\\n/g, '\n');
+  
+  // Log for debugging
+  console.log(`[llm/client] JSON extrait:`, jsonContent.slice(0, 200) + (jsonContent.length > 200 ? '...' : ''));
 
   try {
     const parsed = JSON.parse(jsonContent);
+    console.log(`[llm/client] JSON parse réussi, clés:`, Object.keys(parsed));
     
     // Helper to create job result with URL validation
     const createJobResult = (item: any): JobResult | null => {
