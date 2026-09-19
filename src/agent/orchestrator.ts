@@ -34,9 +34,12 @@ export class AgentOrchestrator {
       maxResultsPerSource: 30,
       satisfactionThreshold: 80,
       minScoreThreshold: 60,
-      allowedSites: ["Indeed", "France Travail", "Leboncoin", "LinkedIn"],
+      // Sites classés par priorité (Pôle Emploi et LinkedIn sont plus accessibles que Indeed)
+      allowedSites: ["France Travail", "LinkedIn", "Leboncoin", "Indeed"],
       useCache: true,
       parallelRequests: 2,
+      autoExtract: true, // Active le scraping automatique après recherche
+      maxUrlsPerSearch: 2, // Nombre max d'URLs à scraper par recherche (réduit pour éviter les blocs)
       ...config,
     };
 
@@ -108,7 +111,8 @@ export class AgentOrchestrator {
           this.state.results,
           this.state.triedQueries,
           this.state.llmCalls,
-          this.state.totalTokensUsed
+          this.state.totalTokensUsed,
+          this.state.rawResults.length
         );
 
         console.log(`[orchestrator] ➡️  Étape ${this.state.currentStep}: ${action.type} - ${action.reason || action.query || action.url || ''}`);
@@ -274,7 +278,93 @@ export class AgentOrchestrator {
       results: result.urls.length,
     });
 
+    // Si autoExtract est activé, scraper automatiquement les URLs
+    if (this.config.autoExtract && result.urls.length > 0) {
+      console.log(`[orchestrator]   [search] → Extraction automatique activée...`);
+      
+      const maxUrls = Math.min(
+        this.config.maxUrlsPerSearch || 3,
+        result.urls.length
+      );
+      
+      const extractedJobs: any[] = [];
+      const successfulUrls: string[] = [];
+      
+      // Extraire de chaque URL
+      for (let i = 0; i < maxUrls && i < result.urls.length; i++) {
+        const url = result.urls[i];
+        console.log(`[orchestrator]   [search]   → Extraction de ${url}...`);
+        
+        try {
+          // Vérifier si on a déjà extrait cette URL
+          if (this.state.triedUrls.includes(url)) {
+            console.log(`[orchestrator]   [search]     ⏭️  URL déjà extraite: ${url}`);
+            successfulUrls.push(url);
+            continue;
+          }
+          
+          // Récupérer la page
+          const fetchResult = await fetchPageTool.execute({ 
+            url,
+            usePuppeteer: this.isPuppeteerRequired(site || url) 
+          });
+          
+          // Extraire les offres
+          const extractResult = await extractJobsTool.execute({
+            html: fetchResult.html,
+            url,
+            siteHint: site || this.extractSiteFromUrl(url),
+            queryContext: query,
+          });
+          
+          // Marquer l'URL comme extraite
+          this.state.triedUrls.push(url);
+          successfulUrls.push(url);
+          
+          // Ajouter les offres aux résultats
+          if (extractResult.jobs && extractResult.jobs.length > 0) {
+            extractedJobs.push(...extractResult.jobs);
+            console.log(`[orchestrator]   [search]     ✓ ${extractResult.jobs.length} offres extraites de ${url}`);
+          } else {
+            console.log(`[orchestrator]   [search]     ✗ Aucune offre extraite de ${url}`);
+          }
+        } catch (error) {
+          console.log(`[orchestrator]   [search]     ✗ Erreur sur ${url}: ${(error as Error).message}`);
+          // Continuer avec l'URL suivante
+        }
+      }
+      
+      return {
+        ...result,
+        extractedJobs,
+        scrapedUrls: successfulUrls,
+      };
+    }
+
     return result;
+  }
+
+  /**
+   * Vérifie si un site nécessite Puppeteer
+   */
+  private isPuppeteerRequired(site: string): boolean {
+    const siteLower = site.toLowerCase();
+    return siteLower.includes("indeed") || 
+           siteLower.includes("linkedin") ||
+           siteLower.includes("leboncoin");
+  }
+
+  /**
+   * Extrait le nom du site d'une URL
+   */
+  private extractSiteFromUrl(url: string): string {
+    try {
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname.replace(/^www\./, "");
+      return hostname.split(".")[0] || "inconnu";
+    } catch {
+      return "inconnu";
+    }
   }
 
   /**
@@ -380,6 +470,23 @@ export class AgentOrchestrator {
               t.results = result.urls.length;
             }
           });
+        }
+        
+        // Si des offres ont été extraites automatiquement
+        if (result?.extractedJobs && result.extractedJobs.length > 0) {
+          const newJobs = result.extractedJobs.filter(
+            (j: any) => !this.state.rawResults.some(
+              r => r.id === j.id || r.url === j.url
+            )
+          );
+          this.state.rawResults.push(...newJobs);
+          console.log(`[orchestrator] +${newJobs.length} nouvelles offres brutes (extraction automatique)`);
+          
+          // Déclencher automatiquement le scoring si on a assez d'offres
+          if (newJobs.length > 0 && this.config.autoExtract) {
+            console.log(`[orchestrator]   → Déclenchement automatique du scoring...`);
+            // Le scoring sera géré par le planner à la prochaine itération
+          }
         }
         break;
 

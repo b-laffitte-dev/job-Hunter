@@ -132,6 +132,10 @@ export interface AgentConfig {
   // Optimisations
   useCache: boolean; // Mettre en cache les extractions
   parallelRequests: number; // Nombre de requêtes parallèles
+  
+  // Extraction automatique
+  autoExtract: boolean; // Active le scraping automatique après recherche
+  maxUrlsPerSearch: number; // Nombre max d'URLs à scraper par recherche
 }
 
 /**
@@ -166,7 +170,7 @@ export interface AgentTool<TParams = unknown, TResult = unknown> {
 /**
  * Définition des outils disponibles
  */
-export type ToolName = "search_web" | "fetch_page" | "extract_jobs" | "score_jobs" | "save_results" | "load_history";
+export type ToolName = "search_web" | "fetch_page" | "extract_jobs" | "scrape_page" | "score_jobs" | "save_results" | "load_history";
 
 /**
  * Paramètres pour chaque outil
@@ -181,6 +185,10 @@ export interface ToolParams {
   fetch_page: {
     url: string;
     usePuppeteer?: boolean; // Pour les sites qui bloquent
+  };
+  scrape_page: {
+    url?: string;
+    html?: string;
   };
   extract_jobs: {
     html: string;
@@ -224,6 +232,10 @@ export interface ToolResults {
   extract_jobs: {
     jobs: JobOffer[];
     confidence: number; // 0-100, confiance de l'extraction
+  };
+  scrape_page: {
+    jobs: JobOffer[];
+    confidence: number; // 0-100, confiance du scraping
   };
   score_jobs: {
     scoredJobs: ScoredJob[];

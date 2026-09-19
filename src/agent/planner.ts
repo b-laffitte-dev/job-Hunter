@@ -53,10 +53,11 @@ export class AgentPlanner {
     currentResults: any[],
     triedQueries: Array<{ query: string; site: string; results: number }>,
     llmCallsUsed: number,
-    tokensUsed: number
+    tokensUsed: number,
+    rawResultsCount: number = 0
   ): Promise<AgentAction> {
     console.log(`[planner] → Décision de la prochaine action`);
-    console.log(`[planner]   Contexte: goal="${goal}", résultats=${currentResults.length}, appels=${llmCallsUsed}, tokens=${tokensUsed}`);
+    console.log(`[planner]   Contexte: goal="${goal}", résultats=${currentResults.length}, raw=${rawResultsCount}, appels=${llmCallsUsed}, tokens=${tokensUsed}`);
     
     const context = this.buildContext(
       goal,
@@ -77,7 +78,7 @@ export class AgentPlanner {
 
     // Appeler LLM pour décider de la prochaine action
     console.log(`[planner] → Appel LLM pour décision...`);
-    const response = await this.decideWithLLM(context);
+    const response = await this.decideWithLLM(context, rawResultsCount);
     console.log(`[planner] ✓ Décision: ${response.nextAction.type} (confiance: ${response.confidence}%)`);
     console.log(`[planner]   Raison: ${response.rationale}`);
     
@@ -188,13 +189,14 @@ Génère un plan de recherche.`
   /**
    * Décide de la prochaine action avec LLM
    */
-  private async decideWithLLM(context: AgentContext): Promise<LLMPlanResponse> {
+  private async decideWithLLM(context: AgentContext, rawResultsCount: number = 0): Promise<LLMPlanResponse> {
     const systemPrompt = `Tu es un assistant de recherche d'emploi. 
 À chaque étape, tu dois décider de la PROCHAINE action à exécuter pour atteindre l'objectif.
 
 Contexte actuel:
 - Objectif: "${context.goal}"
 - Offres trouvées jusqu'à présent: ${context.currentResults.length}
+- Offres brutes non scorées: ${rawResultsCount}
 - Requêtes essayées: ${JSON.stringify(context.triedQueries.slice(-5))}
 - Appels LLM utilisés: ${context.llmCallsUsed}/${context.maxLlmCalls}
 - Tokens utilisés: ${context.tokensUsed}/${context.maxTokens}
@@ -251,7 +253,7 @@ Quelle est la prochaine action à exécuter ?`
       console.error(`[planner] Erreur de décision: ${(error as Error).message}`);
       
       // Retourner une décision par défaut
-      return this.generateDefaultAction(context);
+      return this.generateDefaultAction(context, rawResultsCount);
     }
   }
 
@@ -298,9 +300,22 @@ Quelle est la prochaine action à exécuter ?`
   /**
    * Génère une action par défaut (fallback)
    */
-  private generateDefaultAction(context: AgentContext): LLMPlanResponse {
+  private generateDefaultAction(context: AgentContext, rawResultsCount: number = 0): LLMPlanResponse {
     const triedSites = context.triedQueries.map(t => t.site);
     const availableSites = context.availableSites.filter(s => !triedSites.includes(s));
+    
+    // Si on a des offres brutes non scorées, les scorer en priorité
+    if (rawResultsCount > 0 && context.currentResults.length < rawResultsCount) {
+      return {
+        nextAction: { 
+          type: "score", 
+          reason: `Scorer ${rawResultsCount} offres brutes non encore évaluées` 
+        },
+        rationale: `On a ${rawResultsCount} offres brutes à scorer avant de continuer la recherche`,
+        confidence: 95,
+        estimatedRemainingSteps: Math.min(5, availableSites.length + 1),
+      };
+    }
     
     if (context.currentResults.length >= 10) {
       // Assez de résultats, on peut stop
