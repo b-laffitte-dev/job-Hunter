@@ -14,7 +14,9 @@
     "serve": "tsx src/index.ts --serve",
     "serve:prod": "node dist/index.js --serve",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "job",
@@ -31,10 +33,13 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@jest/globals": "^30.5.2",
     "@types/node": "^26.6.2",
     "@types/ws": "^8.5.12",
+    "@vitest/coverage-v8": "^5.0.1",
     "prettier": "^3.9.8",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.1"
   }
 }
