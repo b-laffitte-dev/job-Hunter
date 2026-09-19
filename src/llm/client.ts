@@ -237,6 +237,58 @@ export async function startConversation(userMessage: string): Promise<MistralCon
 }
 
 /**
+ * Vérifie le statut d'une conversation
+ */
+export async function getConversationStatus(conversationId: string): Promise<string> {
+  const config = loadMistralConfig();
+  
+  try {
+    const response = await fetch(`${config.CONVERSATIONS_API_URL}/${conversationId}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${config.API_KEY}`,
+      },
+    });
+
+    if (!response.ok) {
+      return "unknown";
+    }
+
+    const responseData: any = await response.json();
+    return responseData.status || responseData.state || "active";
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
+ * Attend que la conversation soit terminée
+ */
+export async function waitForConversationCompletion(conversationId: string, timeoutMs: number = 30000): Promise<void> {
+  const startTime = Date.now();
+  const pollInterval = 2000; // Vérifier toutes les 2 secondes
+  
+  while (Date.now() - startTime < timeoutMs) {
+    const status = await getConversationStatus(conversationId);
+    console.log(`[llm/client] Statut conversation: ${status}`);
+    
+    if (status === "completed" || status === "finished" || status === "done") {
+      console.log(`[llm/client] ✓ Conversation terminée`);
+      return;
+    }
+    
+    if (status === "error" || status === "failed") {
+      throw new Error(`Conversation échouée avec statut: ${status}`);
+    }
+    
+    // Attendre avant de vérifier à nouveau
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  }
+  
+  throw new Error(`Timeout attendu pour la fin de la conversation (${timeoutMs}ms)`);
+}
+
+/**
  * Récupère les messages d'une conversation
  */
 export async function getConversationMessages(conversationId: string): Promise<MistralMessage[]> {
@@ -291,8 +343,8 @@ export async function searchJobs(query: string, location?: string): Promise<Agen
       `VERIFIE que chaque URL est valide et accessible. Réponds UNIQUEMENT en français.`
     );
 
-    console.log(`[llm/client] Attente de 5 secondes pour le traitement Mistral...`);
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+    console.log(`[llm/client] Attente de la fin du traitement Mistral...`);
+    await waitForConversationCompletion(conversation.id, 30000);
     console.log(`[llm/client] Récupération des messages pour conversation: ${conversation.id}`);
     const messages = await getConversationMessages(conversation.id);
     const assistantMessage = messages.find((m) => m.role === 'assistant');
