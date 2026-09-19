@@ -1,6 +1,7 @@
 import { loadConfig } from "./config/index.js";
-import { agent } from "./agent/index.js";
+import { AgentOrchestrator, agent } from "./agent/index.js";
 import { resetGlobalLLMCounter } from "./agent/llmCounter.js";
+import type { AgentConfig } from "./agent/types.js";
 import {
   loadSeen,
   saveSeen,
@@ -31,7 +32,7 @@ export async function runOnce(configPath?: string): Promise<RunResult> {
   return runWithConfig(config);
 }
 
-export async function runWithConfig(config: AppConfig): Promise<RunResult> {
+export async function runWithConfig(config: AppConfig & { agent?: Partial<AgentConfig> }): Promise<RunResult> {
   const runId = new Date().toISOString().replace(/[:.]/g, "-");
 
   // Réinitialiser le compteur LLM pour cette exécution
@@ -44,9 +45,14 @@ export async function runWithConfig(config: AppConfig): Promise<RunResult> {
   console.log(`Objectif: "${goal}"`);
   console.log(`Limites: ${config.search.maxResultsPerSource} résultats max par source`);
 
+  // Créer une instance de l'agent avec les paramètres personnalisés
+  const agentInstance = config.agent 
+    ? new AgentOrchestrator(config.agent)
+    : agent;
+
   try {
     // Exécuter la recherche pilotée par l'Agent IA
-    const agentResult: AgentResult = await agent.run(goal);
+    const agentResult: AgentResult = await agentInstance.run(goal);
 
     // Traiter les résultats
     const scored = agentResult.jobs;

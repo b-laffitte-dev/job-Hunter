@@ -26,20 +26,34 @@ export class AgentOrchestrator {
   private state: AgentState;
 
   constructor(config: Partial<AgentConfig> = {}) {
-    // Configuration par défaut
+    // Configuration par défaut - limits élevées pour permettre un scraping complet
     this.config = {
-      maxLlmCalls: 20,
-      maxTokens: 50000,
-      maxSteps: 10,
-      maxResultsPerSource: 30,
+      maxLlmCalls: 50, // Augmenté pour permettre plus d'analyses
+      maxTokens: 150000, // Augmenté pour plus de flexibilité
+      maxSteps: 50, // Beaucoup plus d'étapes possibles
+      maxResultsPerSource: 100, // Plus de résultats par source
       satisfactionThreshold: 80,
       minScoreThreshold: 60,
-      // Sites classés par priorité (Pôle Emploi et LinkedIn sont plus accessibles que Indeed)
-      allowedSites: ["France Travail", "LinkedIn", "Leboncoin", "Indeed"],
+      // Tous les sites disponibles - l'IA peut choisir
+      allowedSites: [
+        "France Travail",
+        "Indeed",
+        "LinkedIn",
+        "Leboncoin",
+        "Welcome to the Jungle",
+        "Glassdoor",
+        "Monster",
+        "APEC",
+        "Cadremploi",
+        "Jobijoba",
+        "Qapa",
+        "Malt",
+        "Hired",
+      ],
       useCache: true,
-      parallelRequests: 2,
+      parallelRequests: 5, // Plus de requêtes parallèles
       autoExtract: true, // Active le scraping automatique après recherche
-      maxUrlsPerSearch: 2, // Nombre max d'URLs à scraper par recherche (réduit pour éviter les blocs)
+      maxUrlsPerSearch: 10, // Nombre max d'URLs à scraper par recherche (augmenté)
       ...config,
     };
 
@@ -346,12 +360,14 @@ export class AgentOrchestrator {
 
   /**
    * Vérifie si un site nécessite Puppeteer
+   * Retourne false par défaut pour essayer d'abord avec HTTP simple
+   * Puppeteer sera utilisé automatiquement en fallback si HTTP échoue
    */
   private isPuppeteerRequired(site: string): boolean {
     const siteLower = site.toLowerCase();
-    return siteLower.includes("indeed") || 
-           siteLower.includes("linkedin") ||
-           siteLower.includes("leboncoin");
+    // Seuls les sites connu pour bloquer systématiquement utilisent Puppeteer d'emblée
+    // La plupart des sites fonctionnent avec HTTP + bons headers
+    return false;
   }
 
   /**

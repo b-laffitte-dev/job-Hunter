@@ -259,6 +259,7 @@ Quelle est la prochaine action à exécuter ?`
 
   /**
    * Génère un plan par défaut (fallback)
+   * Utilise tous les sites disponibles pour maximiser la couverture
    */
   private generateDefaultPlan(goal: string): Omit<AgentPlan, "estimatedCost"> {
     // Extraire la requête et le lieu du goal
@@ -266,34 +267,21 @@ Quelle est la prochaine action à exécuter ?`
     const query = match ? match[1] : goal;
     const location = match ? match[2] : "France";
 
+    // Utiliser tous les sites disponibles
+    const availableSites = this.config.allowedSites || ["France Travail", "Indeed", "LinkedIn", "Leboncoin"];
+    
+    const steps = availableSites.map((site, index) => ({
+      type: "search" as const,
+      query,
+      site,
+      location,
+      reason: `Recherche sur ${site}`,
+      priority: 100 - (index * 10), // Décroissant pour l'ordre
+    }));
+
     return {
-      steps: [
-        {
-          type: "search",
-          query,
-          site: "Indeed",
-          location,
-          reason: "Recherche initiale sur Indeed",
-          priority: 100,
-        },
-        {
-          type: "search",
-          query,
-          site: "France Travail",
-          location,
-          reason: "Recherche complémentaire sur France Travail",
-          priority: 90,
-        },
-        {
-          type: "search",
-          query,
-          site: "Leboncoin",
-          location,
-          reason: "Recherche complémentaire sur Leboncoin",
-          priority: 80,
-        },
-      ],
-      rationale: `Plan par défaut pour "${goal}"`,
+      steps,
+      rationale: `Plan par défaut pour "${goal}" - recherche sur tous les sites disponibles`,
     };
   }
 

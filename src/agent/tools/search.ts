@@ -49,7 +49,8 @@ function generateSearchUrls(
   location: string,
   sites?: string[]
 ): Array<{ site: string; url: string }> {
-  const targetSites = sites || ["Indeed", "France Travail", "Leboncoin", "LinkedIn"];
+  // Utiliser tous les sites disponibles par défaut
+  const targetSites = sites || DEFAULT_SITES.map(s => s.name);
   
   return targetSites.map((site) => ({
     site,
@@ -114,7 +115,8 @@ export const searchWebTool = {
   ): Array<{ site: string; query: string; url: string }> {
     // Utiliser la requête principale + les mots-clés étendus
     const allQueries = [query, ...keywords.slice(0, 3)];
-    const sites = ["Indeed", "France Travail", "Leboncoin"];
+    // Utiliser tous les sites disponibles
+    const sites = DEFAULT_SITES.map(s => s.name);
     
     const plan: Array<{ site: string; query: string; url: string }> = [];
     

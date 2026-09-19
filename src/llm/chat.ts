@@ -5,9 +5,13 @@ import type {
   SearchConfig,
 } from "../types/index.js";
 
+import type { AgentConfig } from "../agent/types.js";
+
 export interface ChatState {
   search: SearchConfig;
   criteria: CriteriaConfig;
+  // Paramètres de l'agent pour contrôler les limites
+  agent?: Partial<AgentConfig>;
 }
 
 export type ChatAction =
@@ -30,6 +34,13 @@ interface LLMInterpretation {
   contractTypes?: string[] | null;
   remoteOk?: boolean | null;
   maxSalary?: number | null;
+  // Paramètres de l'agent
+  maxLlmCalls?: number | null;
+  maxTokens?: number | null;
+  maxSteps?: number | null;
+  satisfactionThreshold?: number | null;
+  autoExtract?: boolean | null;
+  maxUrlsPerSearch?: number | null;
 }
 
 const SYSTEM = `Tu es l'assistant d'une interface de recherche d'emploi française nommée "Job Hunter AI".
@@ -38,36 +49,83 @@ L'utilisateur discute en langage naturel pour affiner sa recherche d'emploi.
 1. Déterminer l'action à effectuer parmi : "update" (modifier les critères de recherche), "search" (lancer la recherche maintenant), "reset" (réinitialiser les critères), "answer" (répondre à une question sans modifier l'état).
 2. Répondre de façon courte et friendly en français (champ "reply").
 3. Si l'action est "update" ou "search", fournir les champs modifiés (laisser null les champs inchangés).
-Renvoie UNIQUEMENT un JSON de la forme:
-{"action": "update|search|reset|answer", "reply": "texte court", "query": null, "location": null, "maxResultsPerSource": null, "minScore": null, "keywords": null, "excludeKeywords": null, "experience": null, "contractTypes": null, "remoteOk": null, "maxSalary": null}
+
+Champs disponibles pour la recherche :
+- query: l'intitulé/requête principale (ex: "secrétariat médico social")
+- location: le lieu (ville, département ou "France")
+- maxResultsPerSource: nombre max de résultats par source
+- minScore: score minimum pour retenir une offre
+- keywords: liste des mots-clés à inclure
+- excludeKeywords: liste des mots à exclure
+- experience: niveau d'expérience requis
+- contractTypes: types de contrats acceptés (CDI, CDD, etc.)
+- remoteOk: accepte le télétravail (true/false)
+- maxSalary: salaire maximum souhaité
+
+Champs disponibles pour les limites de l'agent (optionnels) :
+- maxLlmCalls: nombre max d'appels LLM (défaut: 20)
+- maxTokens: nombre max de tokens (défaut: 50000)
+- maxSteps: nombre max d'étapes (défaut: 10)
+- autoExtract: activer l'extraction automatique (true/false, défaut: true)
+- maxUrlsPerSearch: nombre max d'URLs à scraper par recherche (défaut: 2)
+- satisfactionThreshold: seuil de satisfaction pour arrêter (0-100, défaut: 80)
+
+Renvoie UNIQUEMENT un JSON valide avec UNIQUEMENT les champs explicitement mentionnés par l'utilisateur.
+Format:
+{"action":"update|search|reset|answer","reply":"texte","query":null,"location":null,"maxLlmCalls":null,"maxTokens":null,"maxSteps":null,"autoExtract":null,"maxUrlsPerSearch":null,"maxResultsPerSource":null,"minScore":null,"keywords":null,"excludeKeywords":null,"experience":null,"contractTypes":null,"remoteOk":null,"maxSalary":null}
+
 Règles:
-- "query" est l'intitulé/requête principale de poste (ex: "secrétariat médico social").
-- "location" est le lieu (ville, département ou "France").
-- "keywords" remplace la liste entière des mots-clés (ne pas fusionner partiellement).
-- "excludeKeywords" remplace la liste entière des exclusions.
-- "contractTypes" remplace la liste des contrats acceptés.
-- Ne modifie un champ que si l'utilisateur le demande explicitement.`;
+- Ne modifie UNIQUEMENT les champs explicitement demandés par l'utilisateur
+- Laisse null les champs non modifiés
+- Pour les nombres, utilise des entiers
+- Pour les booléens, utilise true/false
+- Sois précis et ne devine pas les intentions de l'utilisateur`;
 
 function stateToText(state: ChatState): string {
   const s = state.search;
   const c = state.criteria;
-  return `État courant de la recherche:
-- query: "${s.query}"
-- location: "${s.location}"
-- maxResultsPerSource: ${s.maxResultsPerSource}
-- minScore: ${s.minScore}
-- keywords: ${JSON.stringify(c.keywords)}
-- excludeKeywords: ${JSON.stringify(c.excludeKeywords)}
-- experience: "${c.experience}"
-- contractTypes: ${JSON.stringify(c.contractTypes)}
-- remoteOk: ${c.remoteOk}
-- maxSalary: ${c.maxSalary}`;
+  const a = state.agent || {};
+  const lines = [
+    `État courant de la recherche:`,
+    `- query: "${s.query}"`,
+    `- location: "${s.location}"`,
+    `- maxResultsPerSource: ${s.maxResultsPerSource}`,
+    `- minScore: ${s.minScore}`,
+    `- keywords: ${JSON.stringify(c.keywords)}`,
+    `- excludeKeywords: ${JSON.stringify(c.excludeKeywords)}`,
+    `- experience: "${c.experience}"`,
+    `- contractTypes: ${JSON.stringify(c.contractTypes)}`,
+    `- remoteOk: ${c.remoteOk}`,
+    `- maxSalary: ${c.maxSalary}`,
+  ];
+  
+  // Ajouter les paramètres de l'agent s'ils existent
+  if (Object.keys(a).length > 0) {
+    lines.push("", `Paramètres de l'agent:`);
+    if (a.maxLlmCalls != null) lines.push(`- maxLlmCalls: ${a.maxLlmCalls}`);
+    if (a.maxTokens != null) lines.push(`- maxTokens: ${a.maxTokens}`);
+    if (a.maxSteps != null) lines.push(`- maxSteps: ${a.maxSteps}`);
+    if (a.satisfactionThreshold != null) lines.push(`- satisfactionThreshold: ${a.satisfactionThreshold}`);
+    if (a.autoExtract != null) lines.push(`- autoExtract: ${a.autoExtract}`);
+    if (a.maxUrlsPerSearch != null) lines.push(`- maxUrlsPerSearch: ${a.maxUrlsPerSearch}`);
+  }
+  
+  return lines.join("\n");
 }
 
-export function stateFromConfig(config: AppConfig): ChatState {
+export function stateFromConfig(config: AppConfig & { agent?: Partial<import("../agent/types.js").AgentConfig> }): ChatState {
   return {
     search: { ...config.search },
     criteria: { ...config.criteria },
+    agent: config.agent ? { ...config.agent } : {
+      // Valeurs par défaut
+      maxLlmCalls: 20,
+      maxTokens: 50000,
+      maxSteps: 10,
+      satisfactionThreshold: 80,
+      autoExtract: true,
+      maxUrlsPerSearch: 2,
+    },
   };
 }
 
@@ -78,6 +136,8 @@ export function applyInterpretation(
   const next: ChatState = {
     search: { ...state.search },
     criteria: { ...state.criteria },
+    // Conserver les paramètres de l'agent existants
+    agent: state.agent ? { ...state.agent } : undefined,
   };
   if (interp.query != null) next.search.query = interp.query;
   if (interp.location != null) next.search.location = interp.location;
@@ -92,6 +152,33 @@ export function applyInterpretation(
     next.criteria.contractTypes = interp.contractTypes;
   if (interp.remoteOk != null) next.criteria.remoteOk = interp.remoteOk;
   if (interp.maxSalary != null) next.criteria.maxSalary = interp.maxSalary;
+  
+  // Paramètres de l'agent
+  if (interp.maxLlmCalls != null) {
+    next.agent = next.agent || {};
+    next.agent.maxLlmCalls = interp.maxLlmCalls;
+  }
+  if (interp.maxTokens != null) {
+    next.agent = next.agent || {};
+    next.agent.maxTokens = interp.maxTokens;
+  }
+  if (interp.maxSteps != null) {
+    next.agent = next.agent || {};
+    next.agent.maxSteps = interp.maxSteps;
+  }
+  if (interp.satisfactionThreshold != null) {
+    next.agent = next.agent || {};
+    next.agent.satisfactionThreshold = interp.satisfactionThreshold;
+  }
+  if (interp.autoExtract != null) {
+    next.agent = next.agent || {};
+    next.agent.autoExtract = interp.autoExtract;
+  }
+  if (interp.maxUrlsPerSearch != null) {
+    next.agent = next.agent || {};
+    next.agent.maxUrlsPerSearch = interp.maxUrlsPerSearch;
+  }
+  
   return next;
 }
 

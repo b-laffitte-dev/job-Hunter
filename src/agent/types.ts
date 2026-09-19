@@ -298,15 +298,9 @@ export interface SiteConfig {
 
 /**
  * Liste des sites supportés
+ * Ajout de nombreux sites d'emploi français pour élargir la couverture
  */
 export const DEFAULT_SITES: SiteConfig[] = [
-  {
-    name: "Indeed",
-    domain: "fr.indeed.com",
-    searchUrlTemplate: "https://fr.indeed.com/jobs?q={query}&l={location}",
-    needsPuppeteer: true,
-    apiAvailable: false,
-  },
   {
     name: "France Travail",
     domain: "francetravail.fr",
@@ -319,6 +313,20 @@ export const DEFAULT_SITES: SiteConfig[] = [
     },
   },
   {
+    name: "Indeed",
+    domain: "fr.indeed.com",
+    searchUrlTemplate: "https://fr.indeed.com/jobs?q={query}&l={location}",
+    needsPuppeteer: false, // On essaie d'abord sans Puppeteer
+    apiAvailable: false,
+  },
+  {
+    name: "LinkedIn",
+    domain: "www.linkedin.com",
+    searchUrlTemplate: "https://www.linkedin.com/jobs/search/?keywords={query}&location={location}",
+    needsPuppeteer: false, // On essaie d'abord sans Puppeteer
+    apiAvailable: false,
+  },
+  {
     name: "Leboncoin",
     domain: "www.leboncoin.fr",
     searchUrlTemplate: "https://www.leboncoin.fr/recherche?q={query}&location={location}&category=33",
@@ -326,10 +334,66 @@ export const DEFAULT_SITES: SiteConfig[] = [
     apiAvailable: false,
   },
   {
-    name: "LinkedIn",
-    domain: "www.linkedin.com",
-    searchUrlTemplate: "https://www.linkedin.com/jobs/search/?keywords={query}&location={location}",
-    needsPuppeteer: true,
+    name: "Welcome to the Jungle",
+    domain: "www.welcometothejungle.com",
+    searchUrlTemplate: "https://www.welcometothejungle.com/fr/jobs?query={query}&location={location}",
+    needsPuppeteer: false,
+    apiAvailable: false,
+  },
+  {
+    name: "Glassdoor",
+    domain: "www.glassdoor.fr",
+    searchUrlTemplate: "https://www.glassdoor.fr/Emploi/{query}-{location}-SRCH_KO0,14.htm",
+    needsPuppeteer: false,
+    apiAvailable: false,
+  },
+  {
+    name: "Monster",
+    domain: "www.monster.fr",
+    searchUrlTemplate: "https://www.monster.fr/emploi/recherche/?q={query}&where={location}",
+    needsPuppeteer: false,
+    apiAvailable: false,
+  },
+  {
+    name: "APEC",
+    domain: "www.apec.fr",
+    searchUrlTemplate: "https://www.apec.fr/candidat/recherche-offres.html?motscles={query}&lieu={location}",
+    needsPuppeteer: false,
+    apiAvailable: false,
+  },
+  {
+    name: "Cadremploi",
+    domain: "www.cadremploi.fr",
+    searchUrlTemplate: "https://www.cadremploi.fr/emploi/recherche?motsCles={query}&lieu={location}",
+    needsPuppeteer: false,
+    apiAvailable: false,
+  },
+  {
+    name: "Jobijoba",
+    domain: "www.jobijoba.com",
+    searchUrlTemplate: "https://www.jobijoba.com/fr/emploi?what={query}&where={location}",
+    needsPuppeteer: false,
+    apiAvailable: false,
+  },
+  {
+    name: "Qapa",
+    domain: "www.qapa.fr",
+    searchUrlTemplate: "https://www.qapa.fr/emploi/recherche?mots_cles={query}&lieu={location}",
+    needsPuppeteer: false,
+    apiAvailable: false,
+  },
+  {
+    name: "Malt",
+    domain: "www.malt.fr",
+    searchUrlTemplate: "https://www.malt.fr/missions?query={query}&location={location}",
+    needsPuppeteer: false,
+    apiAvailable: false,
+  },
+  {
+    name: "Hired",
+    domain: "hired.com",
+    searchUrlTemplate: "https://hired.com/x/fr/jobs?query={query}&location={location}",
+    needsPuppeteer: false,
     apiAvailable: false,
   },
 ];

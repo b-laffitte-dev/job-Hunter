@@ -32,7 +32,9 @@ function buildConfigFromState(state: ChatState): AppConfig {
     search: state.search,
     criteria: state.criteria,
     sources: base.sources,
-  };
+    // Ajouter les paramètres de l'agent s'ils sont définis
+    ...(state.agent ? { agent: state.agent } : {}),
+  } as AppConfig & { agent?: Partial<import("./agent/types.js").AgentConfig> };
 }
 
 interface Session {

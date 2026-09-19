@@ -34,6 +34,7 @@ function setStatus(text, cls) {
 function renderState(state) {
   const s = state.search;
   const c = state.criteria;
+  const a = state.agent || {};
   const lines = [
     `Requête : ${s.query}`,
     `Lieu : ${s.location}`,
@@ -47,7 +48,40 @@ function renderState(state) {
     `Télétravail : ${c.remoteOk ? "oui" : "non"}`,
     `Salaire max : ${c.maxSalary ?? "—"}`,
   ];
+  
+  // Ajouter les paramètres de l'agent s'ils existent
+  if (Object.keys(a).length > 0) {
+    lines.push("", `Paramètres de l'agent:`);
+    if (a.maxLlmCalls != null) lines.push(`- Appels LLM max: ${a.maxLlmCalls}`);
+    if (a.maxTokens != null) lines.push(`- Tokens max: ${a.maxTokens}`);
+    if (a.maxSteps != null) lines.push(`- Étapes max: ${a.maxSteps}`);
+    if (a.satisfactionThreshold != null) lines.push(`- Seuil satisfaction: ${a.satisfactionThreshold}%`);
+    if (a.autoExtract != null) lines.push(`- Extraction auto: ${a.autoExtract ? "oui" : "non"}`);
+    if (a.maxUrlsPerSearch != null) lines.push(`- URLs max/scrap: ${a.maxUrlsPerSearch}`);
+    
+    // Mettre à jour les valeurs des inputs de configuration
+    updateAgentConfigInputs(a);
+  }
+  
   stateEl.textContent = lines.join("\n");
+}
+
+function updateAgentConfigInputs(agentConfig) {
+  const inputs = {
+    maxLlmCalls: document.getElementById("maxLlmCalls"),
+    maxTokens: document.getElementById("maxTokens"),
+    maxSteps: document.getElementById("maxSteps"),
+    satisfactionThreshold: document.getElementById("satisfactionThreshold"),
+    autoExtract: document.getElementById("autoExtract"),
+    maxUrlsPerSearch: document.getElementById("maxUrlsPerSearch"),
+  };
+  
+  if (inputs.maxLlmCalls) inputs.maxLlmCalls.value = agentConfig.maxLlmCalls ?? 20;
+  if (inputs.maxTokens) inputs.maxTokens.value = agentConfig.maxTokens ?? 50000;
+  if (inputs.maxSteps) inputs.maxSteps.value = agentConfig.maxSteps ?? 10;
+  if (inputs.satisfactionThreshold) inputs.satisfactionThreshold.value = agentConfig.satisfactionThreshold ?? 80;
+  if (inputs.autoExtract) inputs.autoExtract.value = String(agentConfig.autoExtract ?? true);
+  if (inputs.maxUrlsPerSearch) inputs.maxUrlsPerSearch.value = agentConfig.maxUrlsPerSearch ?? 2;
 }
 
 function scoreClass(score) {
@@ -157,6 +191,34 @@ formEl.addEventListener("submit", (e) => {
   send(text);
   inputEl.value = "";
 });
+
+// Sauvegarder les paramètres de l'agent
+const saveAgentConfigBtn = document.getElementById("saveAgentConfig");
+if (saveAgentConfigBtn) {
+  saveAgentConfigBtn.addEventListener("click", () => {
+    const agentConfig = {
+      maxLlmCalls: parseInt(document.getElementById("maxLlmCalls")?.value) || 20,
+      maxTokens: parseInt(document.getElementById("maxTokens")?.value) || 50000,
+      maxSteps: parseInt(document.getElementById("maxSteps")?.value) || 10,
+      satisfactionThreshold: parseInt(document.getElementById("satisfactionThreshold")?.value) || 80,
+      autoExtract: document.getElementById("autoExtract")?.value === "true",
+      maxUrlsPerSearch: parseInt(document.getElementById("maxUrlsPerSearch")?.value) || 2,
+    };
+    
+    // Envoyer au serveur via WebSocket
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: "update",
+        message: "Mise à jour des paramètres de l'agent",
+        state: { agent: agentConfig }
+      }));
+      addBubble("Paramètres de l'agent mis à jour", "system");
+      setStatus("Paramètres sauvegardés", "ok");
+    } else {
+      setStatus("Impossible de sauvegarder : socket non connectée", "error");
+    }
+  });
+}
 
 connect();
 

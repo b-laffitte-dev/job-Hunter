@@ -34,6 +34,39 @@
           <summary>📋 Critères de recherche</summary>
           <pre id="state" class="state"></pre>
         </details>
+        <details id="agent-config-details">
+          <summary>⚙️ Paramètres de l'agent</summary>
+          <div id="agent-config" class="agent-config">
+            <div class="config-row">
+              <label>Appels LLM max:</label>
+              <input type="number" id="maxLlmCalls" min="1" max="100" value="20" />
+            </div>
+            <div class="config-row">
+              <label>Tokens max:</label>
+              <input type="number" id="maxTokens" min="1000" max="200000" value="50000" />
+            </div>
+            <div class="config-row">
+              <label>Étapes max:</label>
+              <input type="number" id="maxSteps" min="1" max="50" value="10" />
+            </div>
+            <div class="config-row">
+              <label>Seuil satisfaction:</label>
+              <input type="number" id="satisfactionThreshold" min="0" max="100" value="80" />
+            </div>
+            <div class="config-row">
+              <label>Extraction auto:</label>
+              <select id="autoExtract">
+                <option value="true" selected>Oui</option>
+                <option value="false">Non</option>
+              </select>
+            </div>
+            <div class="config-row">
+              <label>URLs max/scrap:</label>
+              <input type="number" id="maxUrlsPerSearch" min="1" max="10" value="2" />
+            </div>
+            <button id="saveAgentConfig" class="config-save-btn">✓ Sauvegarder</button>
+          </div>
+        </details>
         <details open>
           <summary>💼 Offres trouvées (<span id="count">0</span>)</summary>
           <div id="jobs" class="jobs"></div>

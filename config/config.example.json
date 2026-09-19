@@ -34,9 +34,51 @@
     {
       "name": "welcometothejungle",
       "type": "generic",
-      "enabled": false,
+      "enabled": true,
       "baseUrl": "https://www.welcometothejungle.com/jobs",
-      "needsPuppeteer": true
+      "needsPuppeteer": false
+    },
+    {
+      "name": "linkedin",
+      "type": "linkedin",
+      "enabled": true,
+      "baseUrl": "https://www.linkedin.com/jobs/search"
+    },
+    {
+      "name": "glassdoor",
+      "type": "generic",
+      "enabled": true,
+      "baseUrl": "https://www.glassdoor.fr/Emploi"
+    },
+    {
+      "name": "monster",
+      "type": "generic",
+      "enabled": true,
+      "baseUrl": "https://www.monster.fr/emploi/recherche"
+    },
+    {
+      "name": "apec",
+      "type": "generic",
+      "enabled": true,
+      "baseUrl": "https://www.apec.fr/candidat/recherche-offres.html"
+    },
+    {
+      "name": "cadremploi",
+      "type": "generic",
+      "enabled": true,
+      "baseUrl": "https://www.cadremploi.fr/emploi/recherche"
+    },
+    {
+      "name": "jobijoba",
+      "type": "generic",
+      "enabled": true,
+      "baseUrl": "https://www.jobijoba.com/fr/emploi"
+    },
+    {
+      "name": "qapa",
+      "type": "generic",
+      "enabled": true,
+      "baseUrl": "https://www.qapa.fr/emploi/recherche"
     }
   ]
 }
