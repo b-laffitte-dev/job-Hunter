@@ -58,7 +58,7 @@ const ConfigSchema = z.object({
   sources: z.array(
     z.object({
       name: z.string(),
-      type: z.enum(["francetravail", "indeed", "leboncoin", "generic"]),
+      type: z.enum(["francetravail", "indeed", "leboncoin", "linkedin", "generic"]),
       enabled: z.boolean(),
       baseUrl: z.string().optional(),
       needsPuppeteer: z.boolean().optional(),
