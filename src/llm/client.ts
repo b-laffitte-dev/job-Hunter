@@ -276,42 +276,6 @@ export async function getConversationMessages(conversationId: string): Promise<M
 }
 
 /**
- * Extraire le contenu JSON d'un texte, même s'il est imbriqué dans des blocs markdown
- */
-function extractJsonContent(text: string): string | null {
-  // Essayer de trouver un bloc ```json d'abord
-  const jsonBlockMatch = text.match(/```json\s*([\s\S]*?)```/);
-  if (jsonBlockMatch) {
-    return jsonBlockMatch[1];
-  }
-  
-  // Essayer de trouver un bloc entre ```markdown ... ```markdown
-  const markdownBlockMatch = text.match(/```markdown\s*([\s\S]*?)```/);
-  if (markdownBlockMatch) {
-    const innerContent = markdownBlockMatch[1];
-    // Extraire le JSON de l'intérieur du bloc markdown
-    const innerJsonMatch = innerContent.match(/```json\s*([\s\S]*?)```/);
-    if (innerJsonMatch) {
-      return innerJsonMatch[1];
-    }
-    // Si pas de bloc json explicite, essayer de trouver du JSON dans le contenu
-    const jsonInMarkdown = innerContent.match(/\{[^\}]*\}/s) || innerContent.match(/\\[[^\\]]*\\]/s);
-    if (jsonInMarkdown) {
-      return jsonInMarkdown[0];
-    }
-  }
-  
-  // Essayer de trouver n'importe quel bloc ```...```
-  const anyBlockMatch = text.match(/```\s*([\s\S]*?)```/);
-  if (anyBlockMatch) {
-    return anyBlockMatch[1];
-  }
-  
-  // Pas de bloc trouvé, retourner null
-  return null;
-}
-
-/**
  * Effectue une recherche via l'agent Mistral avec capacité web_search
  */
 export async function searchJobs(query: string, location?: string): Promise<AgentSearchResult> {
@@ -345,16 +309,10 @@ export async function searchJobs(query: string, location?: string): Promise<Agen
     // Extract references from the JSON content (Mistral Conversations API doesn't provide toolReference)
     let references: string[] = [];
     try {
-      // First, try to extract JSON block directly
-      let jsonContent = extractJsonContent(textContent);
-      
-      if (jsonContent) {
-        // The API response has escaped quotes (\" -> "), we need to unescape them
-        jsonContent = jsonContent.replace(/\\"/g, '"').replace(/\\'/g, "'").replace(/\\n/g, '\n');
-        const parsed = JSON.parse(jsonContent);
-        // Extract sources from the JSON (can be 'sources' or 'references' field)
-        references = parsed.sources || parsed.references || [];
-      }
+      // Use the existing extractJson function which is more robust
+      const parsed = extractJson<{sources?: string[], references?: string[], offres?: any[]}>(textContent);
+      // Extract sources from the JSON (can be 'sources' or 'references' field)
+      references = parsed.sources || parsed.references || [];
     } catch (e) {
       console.log(`[llm/client] ⚠ Extraction des références échouée: ${e}`);
       console.log(`[llm/client] Contenu analysé (premier 1000 chars):`, textContent.slice(0, 1000));
@@ -436,22 +394,12 @@ export function isValidUrl(url: string): boolean {
 }
 
 export function extractJobResults(text: string, query: string, references: string[]): JobResult[] {
-  // Extract JSON content using the helper function
-  let jsonContent = extractJsonContent(text);
-  
-  // If no JSON block found, use the entire text
-  if (!jsonContent) {
-    jsonContent = text;
-  }
-
-  // Clean up escaped characters from the API response
-  jsonContent = jsonContent.replace(/\\"/g, '"').replace(/\\'/g, "'").replace(/\\n/g, '\n');
-  
-  // Log for debugging
-  console.log(`[llm/client] JSON extrait:`, jsonContent.slice(0, 200) + (jsonContent.length > 200 ? '...' : ''));
+  // Log for debugging - show first part of text
+  console.log(`[llm/client] JSON extrait:`, text.slice(0, 200) + (text.length > 200 ? '...' : ''));
 
   try {
-    const parsed = JSON.parse(jsonContent);
+    // Use the existing extractJson function which is more robust
+    const parsed = extractJson<any>(text);
     console.log(`[llm/client] JSON parse réussi, clés:`, Object.keys(parsed));
     
     // Helper to create job result with URL validation
