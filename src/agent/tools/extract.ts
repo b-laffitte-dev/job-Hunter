@@ -114,34 +114,48 @@ export const extractJobsTool = {
     const maxCalls = 20;
     const maxTokens = 50000;
     
+    console.log(`[extract_jobs] → Début extraction (site: ${siteHint}, HTML: ${html.length} caractères)`);
+    console.log(`[extract_jobs]   Tokens estimés: ~${estimatedTokens}`);
+    
     if (!counter.canMakeCall(estimatedTokens, maxCalls, maxTokens)) {
+      console.log(`[extract_jobs] ❌ Limite LLM atteinte: ${counter.calls}/${maxCalls} appels, ${counter.tokens}/${maxTokens} tokens`);
       throw new Error(`Limite LLM atteinte: ${counter.calls}/${maxCalls} appels, ${counter.tokens}/${maxTokens} tokens.`);
     }
 
     try {
+      console.log(`[extract_jobs] → Construction du prompt d'extraction...`);
       const prompt = buildExtractionPrompt(html, url, siteHint, queryContext);
       const messages = [
         { role: "system" as const, content: "Tu es un expert en extraction. Renvoie UNIQUEMENT du JSON valide." },
         { role: "user" as const, content: prompt },
       ];
 
+      console.log(`[extract_jobs] → Appel LLM pour extraction...`);
       const rawResponse = await chat(messages, { temperature: 0.0, maxTokens: 4000 });
+      console.log(`[extract_jobs] ✓ Réponse LLM reçue`);
+      
       const result = extractJson<ExtractionResult>(rawResponse);
       const jobs = normalizeJobs(result.jobs, url, siteHint);
       const actualTokens = estimateActualTokens(html, rawResponse);
       counter.addCall(actualTokens);
 
-      console.log(`[extract_jobs] ✓ ${jobs.length} offres extraites de ${url} (${actualTokens} tokens)`);
+      const executionTime = Date.now() - startTime;
+      console.log(`[extract_jobs] ✓ ${jobs.length} offres extraites (${executionTime}ms, ${actualTokens} tokens)`);
       return { jobs, confidence: result.confidence || 80 };
     } catch (error) {
       const errorMessage = (error as Error).message;
-      console.error(`[extract_jobs] ✗ ${url}: ${errorMessage}`);
-      if (errorMessage.includes("Limite LLM")) throw error;
+      console.error(`[extract_jobs] ✗ Erreur: ${errorMessage}`);
+      if (errorMessage.includes("Limite LLM")) {
+        console.log(`[extract_jobs] ❌ Limite LLM atteinte, arrêt`);
+        throw error;
+      }
+      console.log(`[extract_jobs] ⚠️  Tentative de fallback heuristique...`);
       const fallbackJobs = heuristicExtract(html, url, siteHint);
       if (fallbackJobs.length > 0) {
-        console.log(`[extract_jobs] Fallback: ${fallbackJobs.length} offres`);
+        console.log(`[extract_jobs] ✓ Fallback: ${fallbackJobs.length} offres extraites via JSON-LD`);
         return { jobs: fallbackJobs, confidence: 50 };
       }
+      console.log(`[extract_jobs] ✗ Fallback échoué`);
       throw new Error(`Échec d'extraction: ${errorMessage}`);
     }
   },

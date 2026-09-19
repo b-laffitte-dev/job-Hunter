@@ -65,11 +65,15 @@ export const searchWebTool = {
     const { query, site, location = "France", maxResults = 30 } = params;
     const startTime = Date.now();
 
+    console.log(`[search_web] → Recherche: query="${query}", site="${site || 'tous'}", location="${location}"`);
+
     try {
       // Si un site spécifique est demandé
       if (site) {
+        console.log(`[search_web]   → Génération URL pour ${site}`);
         const url = buildSearchUrl(site, query, location);
-        console.log(`[search_web] ✓ 1 URL générée pour ${site}: ${url}`);
+        const executionTime = Date.now() - startTime;
+        console.log(`[search_web] ✓ URL générée en ${executionTime}ms: ${url.slice(0, 80)}...`);
         
         return {
           urls: [url],
@@ -79,11 +83,14 @@ export const searchWebTool = {
       }
 
       // Sinon, générer des URLs pour plusieurs sites
+      console.log(`[search_web]   → Génération pour tous les sites`);
       const searchUrls = generateSearchUrls(query, location);
+      const executionTime = Date.now() - startTime;
       
-      console.log(
-        `[search_web] ✓ ${searchUrls.length} URLs générées pour "${query}" à ${location}`
-      );
+      console.log(`[search_web] ✓ ${searchUrls.length} URLs générées en ${executionTime}ms`);
+      searchUrls.forEach((s, i) => {
+        console.log(`[search_web]   ${i + 1}. ${s.site}: ${s.url.slice(0, 70)}...`);
+      });
       
       // Retourner la première URL par défaut, ou toutes si demandé
       return {
@@ -92,7 +99,7 @@ export const searchWebTool = {
       };
     } catch (error) {
       const errorMessage = (error as Error).message;
-      console.error(`[search_web] ✗: ${errorMessage}`);
+      console.error(`[search_web] ✗ Erreur: ${errorMessage}`);
       throw new Error(`Échec de génération d'URLs: ${errorMessage}`);
     }
   },

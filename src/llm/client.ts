@@ -14,6 +14,12 @@ export async function chat(
   options: { temperature?: number; maxTokens?: number } = {},
 ): Promise<string> {
   const env = loadEnv();
+  const startTime = Date.now();
+  const totalInputTokens = messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0);
+  
+  console.log(`[llm/client] → Appel API: model=${env.LLM_MODEL}, temp=${options.temperature ?? 0.2}, max_tokens=${options.maxTokens ?? 1024}`);
+  console.log(`[llm/client]   Messages: ${messages.length}, Input tokens: ~${totalInputTokens}`);
+  
   const res = await fetch(`${env.LLM_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -28,18 +34,31 @@ export async function chat(
       response_format: { type: "json_object" },  // Force Mistral à retourner du JSON valide
     }),
   });
+  
+  const duration = Date.now() - startTime;
+  
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
+    console.log(`[llm/client] ✗ Erreur HTTP ${res.status}: ${txt.slice(0, 100)}`);
     throw new Error(`LLM HTTP ${res.status}: ${txt.slice(0, 300)}`);
   }
+  
   let data: ChatResponse;
   try {
     data = (await res.json()) as ChatResponse;
   } catch (e) {
     const rawText = await res.text().catch(() => "");
+    console.log(`[llm/client] ✗ Réponse non-JSON: ${rawText.slice(0, 100)}`);
     throw new Error(`LLM réponse non-JSON: ${rawText.slice(0, 300)}`);
   }
-  return data.choices?.[0]?.message?.content?.trim() ?? "";
+  
+  const responseContent = data.choices?.[0]?.message?.content?.trim() ?? "";
+  const responseTokens = Math.ceil(responseContent.length / 4);
+  const totalTokens = totalInputTokens + responseTokens;
+  
+  console.log(`[llm/client] ✓ Réponse reçue en ${duration}ms (output: ~${responseTokens} tokens, total: ~${totalTokens})`);
+  
+  return responseContent;
 }
 
 export function extractJson<T>(text: string): T {

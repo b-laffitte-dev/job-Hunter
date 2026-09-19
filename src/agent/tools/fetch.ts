@@ -58,29 +58,37 @@ export const fetchPageTool = {
     const startTime = Date.now();
     const { url, usePuppeteer = false } = params;
 
+    console.log(`[fetch_page] → Récupération de: ${url} (Puppeteer: ${usePuppeteer})`);
+
     try {
       let html: string;
       let statusCode: number;
+      let methodUsed = "HTTP";
 
       if (usePuppeteer) {
         // Utiliser Puppeteer pour les sites qui bloquent
+        console.log(`[fetch_page]   → Méthode: Puppeteer (site bloquant)`);
         html = await this.fetchWithPuppeteer(url);
-        statusCode = 200; // Puppeteer ne retourne pas toujours le status code
+        statusCode = 200;
+        methodUsed = "Puppeteer";
       } else {
         // Essayer avec HTTP simple d'abord
         try {
+          console.log(`[fetch_page]   → Méthode: HTTP simple`);
           html = await fetchText(url, { timeoutMs: 30000 });
           statusCode = 200;
         } catch (httpError) {
           // Si HTTP échoue, essayer avec Puppeteer automatiquement
-          console.log(`[fetch_page] HTTP échoué, tentative avec Puppeteer: ${url}`);
+          console.log(`[fetch_page]   ⚠️  HTTP échoué: ${(httpError as Error).message}`);
+          console.log(`[fetch_page]   → Tentative avec Puppeteer...`);
           html = await this.fetchWithPuppeteer(url);
           statusCode = 200;
+          methodUsed = "Puppeteer (fallback)";
         }
       }
 
       const executionTime = Date.now() - startTime;
-      console.log(`[fetch_page] ✓ ${url} (${executionTime}ms, ${html.length} bytes)`);
+      console.log(`[fetch_page] ✓ ${url} via ${methodUsed} (${executionTime}ms, ${html.length} bytes)`);
 
       return {
         url,

@@ -55,6 +55,9 @@ export class AgentPlanner {
     llmCallsUsed: number,
     tokensUsed: number
   ): Promise<AgentAction> {
+    console.log(`[planner] → Décision de la prochaine action`);
+    console.log(`[planner]   Contexte: goal="${goal}", résultats=${currentResults.length}, appels=${llmCallsUsed}, tokens=${tokensUsed}`);
+    
     const context = this.buildContext(
       goal,
       currentResults,
@@ -66,14 +69,17 @@ export class AgentPlanner {
     // Vérifier les limites avant de continuer
     if (!this.counter.checkLimit(this.config.maxLlmCalls, this.config.maxTokens)) {
       console.log(
-        `[planner] Limite atteinte: ${this.counter.calls}/${this.config.maxLlmCalls} appels, ` +
+        `[planner] ❌ Limite atteinte: ${this.counter.calls}/${this.config.maxLlmCalls} appels, ` +
         `${this.counter.tokens}/${this.config.maxTokens} tokens`
       );
       return { type: "stop", reason: "Limite LLM atteinte" };
     }
 
     // Appeler LLM pour décider de la prochaine action
+    console.log(`[planner] → Appel LLM pour décision...`);
     const response = await this.decideWithLLM(context);
+    console.log(`[planner] ✓ Décision: ${response.nextAction.type} (confiance: ${response.confidence}%)`);
+    console.log(`[planner]   Raison: ${response.rationale}`);
     
     // Valider et retourner l'action
     return this.validateAction(response.nextAction, context);

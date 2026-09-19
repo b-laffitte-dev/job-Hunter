@@ -45,17 +45,26 @@ export const scoreJobsTool = {
     const { jobs, criteria } = params;
     const startTime = Date.now();
 
-    if (jobs.length === 0) return { scoredJobs: [] };
+    console.log(`[score_jobs] → Scoring de ${jobs.length} offres`);
+    
+    if (jobs.length === 0) {
+      console.log(`[score_jobs] ⏭️  Aucune offre à scorer`);
+      return { scoredJobs: [] };
+    }
 
     const estimatedTokens = estimateScoringTokens(jobs);
     const maxCalls = 20;
     const maxTokens = 50000;
     
+    console.log(`[score_jobs]   Tokens estimés: ~${estimatedTokens}`);
+    
     if (!counter.canMakeCall(estimatedTokens, maxCalls, maxTokens)) {
+      console.log(`[score_jobs] ❌ Limite LLM atteinte: ${counter.calls}/${maxCalls} appels, ${counter.tokens}/${maxTokens} tokens`);
       throw new Error(`Limite LLM atteinte pour le scoring: ${counter.calls}/${maxCalls}, ${counter.tokens}/${maxTokens}`);
     }
 
     try {
+      console.log(`[score_jobs] → Appel LLM pour scoring...`);
       const config: any = {
         search: { query: criteria.query, location: criteria.location, maxResultsPerSource: 30, minScore: criteria.minScore },
         criteria: { keywords: criteria.keywords, excludeKeywords: criteria.excludeKeywords, experience: "", contractTypes: [], remoteOk: true, maxSalary: null },
@@ -63,12 +72,21 @@ export const scoreJobsTool = {
       };
       const scoredJobs = await originalScoreJobs(config, jobs, []);
       counter.addCall(estimatedTokens);
-      console.log(`[score_jobs] ✓ ${scoredJobs.length} offres scorées (${estimatedTokens} tokens)`);
+      
+      const executionTime = Date.now() - startTime;
+      const avgScore = scoredJobs.length > 0 
+        ? Math.round(scoredJobs.reduce((s, j) => s + j.score, 0) / scoredJobs.length)
+        : 0;
+      console.log(`[score_jobs] ✓ ${scoredJobs.length} offres scorées (${executionTime}ms, ${estimatedTokens} tokens, score moyen: ${avgScore}/100)`);
       return { scoredJobs };
     } catch (error) {
-      console.error(`[score_jobs] ✗: ${(error as Error).message}`);
+      console.error(`[score_jobs] ✗ Erreur: ${(error as Error).message}`);
+      console.log(`[score_jobs] ⚠️  Tentative de fallback heuristique...`);
       const fallbackJobs = heuristicScore(jobs, criteria);
-      console.log(`[score_jobs] Fallback: scoring heuristique`);
+      const avgFallbackScore = fallbackJobs.length > 0 
+        ? Math.round(fallbackJobs.reduce((s, j) => s + j.score, 0) / fallbackJobs.length)
+        : 0;
+      console.log(`[score_jobs] ✓ Fallback: ${fallbackJobs.length} offres scorées (score moyen: ${avgFallbackScore}/100)`);
       return { scoredJobs: fallbackJobs };
     }
   },
