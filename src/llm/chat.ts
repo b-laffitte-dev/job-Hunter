@@ -100,6 +100,7 @@ export async function interpretMessage(
   userMessage: string,
   history: { role: "user" | "assistant"; content: string }[] = [],
 ): Promise<{ action: ChatAction; reply: string }> {
+  console.log(`[llm/chat] Interprétation du message: "${userMessage}"`);
   const messages: { role: "system" | "user" | "assistant"; content: string }[] =
     [{ role: "system", content: SYSTEM }];
   // On injecte un historique court (max 6 échanges) pour le contexte conversationnel
@@ -113,8 +114,10 @@ export async function interpretMessage(
 
   let interp: LLMInterpretation;
   try {
+    console.log(`[llm/chat] → Appel LLM pour interprétation...`);
     const raw = await chat(messages, { temperature: 0.2, maxTokens: 600 });
     interp = extractJson<LLMInterpretation>(raw);
+    console.log(`[llm/chat] ✓ Action déterminée: ${interp.action}`);
   } catch (e) {
     // Repli : on tente de lancer une recherche si le message contient un déclencheur, sinon on répond
     const trigger = /\b(lance|cherche|recherche|go|lancer|trouve)\b/i.test(

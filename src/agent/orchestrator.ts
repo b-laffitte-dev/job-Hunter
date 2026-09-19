@@ -96,11 +96,13 @@ export class AgentOrchestrator {
       // console.log(`[orchestrator] Plan généré: ${this.state.plan?.steps.length} étapes`);
 
       // Étape 2: Boucle principale
+      console.log(`[orchestrator] 🚀 Début de la boucle de recherche...`);
       while (this.canContinue()) {
         this.state.currentStep++;
         this.state.status = "searching";
 
         // Décider de la prochaine action
+        console.log(`[orchestrator] 📋 Décision de la prochaine action...`);
         const action = await this.planner.decideNextAction(
           goal,
           this.state.results,
@@ -109,16 +111,22 @@ export class AgentOrchestrator {
           this.state.totalTokensUsed
         );
 
-        console.log(`[orchestrator] Étape ${this.state.currentStep}: ${action.type} - ${action.reason || action.query || action.url || ''}`);
+        console.log(`[orchestrator] ➡️  Étape ${this.state.currentStep}: ${action.type} - ${action.reason || action.query || action.url || ''}`);
 
         // Exécuter l'action
+        console.log(`[orchestrator] 🔄 Exécution de l'action...`);
         const result = await this.executeAction(action, runId);
+        console.log(`[orchestrator] ✅ Action terminée`);
 
         // Mettre à jour l'état
         this.updateState(action, result, runId);
 
+        // Afficher la progression
+        console.log(`[orchestrator] 📊 Progression: ${this.state.results.length} offres trouvées, ${this.state.llmCalls} appels LLM, ~${this.state.totalTokensUsed} tokens`);
+
         // Vérifier si on doit s'arrêter
         if (action.type === "stop" || !this.canContinue()) {
+          console.log(`[orchestrator] 🛑 Arrêt demandé`);
           this.state.status = "stopped";
           break;
         }
@@ -170,19 +178,19 @@ export class AgentOrchestrator {
   private canContinue(): boolean {
     // Vérifier les limites
     if (!this.counter.checkLimit(this.config.maxLlmCalls, this.config.maxTokens)) {
-      console.log(`[orchestrator] Limite LLM atteinte, arrêt.`);
+      console.log(`[orchestrator] ❌ Limite LLM atteinte: ${this.counter.calls}/${this.config.maxLlmCalls} appels, ${this.counter.tokens}/${this.config.maxTokens} tokens`);
       return false;
     }
 
     // Vérifier le nombre d'étapes
     if (this.state.currentStep >= this.config.maxSteps) {
-      console.log(`[orchestrator] Nombre maximal d'étapes atteint (${this.config.maxSteps}), arrêt.`);
+      console.log(`[orchestrator] ❌ Nombre maximal d'étapes atteint (${this.state.currentStep}/${this.config.maxSteps})`);
       return false;
     }
 
     // Vérifier la satisfaction
     if (this.state.satisfaction >= this.config.satisfactionThreshold) {
-      console.log(`[orchestrator] Satisfaction suffisante (${this.state.satisfaction}/100), arrêt.`);
+      console.log(`[orchestrator] ✅ Satisfaction suffisante (${this.state.satisfaction}/100)`);
       return false;
     }
 
@@ -193,29 +201,36 @@ export class AgentOrchestrator {
    * Exécute une action
    */
   private async executeAction(action: AgentAction, runId: string): Promise<any> {
+    const actionType = action.type;
+    console.log(`[orchestrator]   Exécution: ${actionType}`);
     try {
-      switch (action.type) {
+      switch (actionType) {
         case "search":
+          console.log(`[orchestrator]   → Recherche: query="${action.query}", site="${action.site}", location="${action.location}"`);
           return await this.executeSearch(action);
         
         case "extract":
+          console.log(`[orchestrator]   → Extraction: url="${action.url?.slice(0, 60) || action.html?.slice(0, 40) || '...'}"`);
           return await this.executeExtract(action);
         
         case "score":
+          console.log(`[orchestrator]   → Scoring: ${this.state.rawResults.length} offres à scorer`);
           return await this.executeScore(action);
         
         case "refine":
+          console.log(`[orchestrator]   → Raffinement: ${action.refinement}`);
           return await this.executeRefine(action);
         
         case "stop":
+          console.log(`[orchestrator]   → Arrêt: ${action.reason}`);
           return { success: true, message: action.reason };
         
         default:
-          throw new Error(`Type d'action inconnu: ${(action as AgentAction).type}`);
+          throw new Error(`Type d'action inconnu: ${actionType}`);
       }
     } catch (error) {
       const errorMessage = (error as Error).message;
-      console.error(`[orchestrator] Erreur lors de l'exécution de ${action.type}: ${errorMessage}`);
+      console.error(`[orchestrator]   ✗ Erreur: ${errorMessage}`);
       throw error;
     }
   }
@@ -225,6 +240,7 @@ export class AgentOrchestrator {
    */
   private async executeSearch(action: AgentAction): Promise<any> {
     const { query, site, location = "France", maxResults = 30 } = action;
+    console.log(`[orchestrator]   [search] Recherche: "${query}" sur ${site}`);
     
     if (!query) {
       throw new Error("La recherche nécessite un paramètre 'query'");
@@ -237,17 +253,19 @@ export class AgentOrchestrator {
     );
     
     if (alreadyTried) {
-      console.log(`[orchestrator] Requête déjà essayée: ${query} sur ${site}`);
+      console.log(`[orchestrator]   [search] ⏭️  Requête déjà essayée: ${query} sur ${site}`);
       return { success: true, urls: [], query, site, skipped: true };
     }
 
     // Exécuter la recherche
+    console.log(`[orchestrator]   [search] → Génération des URLs...`);
     const result = await searchWebTool.execute({
       query,
       site,
       location,
       maxResults,
     });
+    console.log(`[orchestrator]   [search] ✓ ${result.urls.length} URL(s) générée(s)`);
 
     // Mettre à jour les requêtes essayées
     this.state.triedQueries.push({
@@ -264,6 +282,7 @@ export class AgentOrchestrator {
    */
   private async executeExtract(action: AgentAction): Promise<any> {
     const { url, html } = action;
+    console.log(`[orchestrator]   [extract] Début extraction...`);
     
     if (!url && !html) {
       throw new Error("L'extraction nécessite une URL ou du HTML");
@@ -271,7 +290,7 @@ export class AgentOrchestrator {
 
     // Vérifier si on a déjà extrait cette URL
     if (url && this.state.triedUrls.includes(url)) {
-      console.log(`[orchestrator] URL déjà extraite: ${url}`);
+      console.log(`[orchestrator]   [extract] ⏭️  URL déjà extraite: ${url}`);
       return { success: true, jobs: [], url, skipped: true };
     }
 
@@ -280,6 +299,7 @@ export class AgentOrchestrator {
     
     // Si on n'a pas le HTML mais qu'on a une URL, le récupérer
     if (!html && url) {
+      console.log(`[orchestrator]   [extract] → Récupération de la page: ${url}`);
       const fetchResult = await fetchPageTool.execute({ url });
       pageHtml = fetchResult.html;
       
@@ -290,12 +310,14 @@ export class AgentOrchestrator {
     // Extraire les offres du HTML
     const actionAny = action as any;
     const siteHint = actionAny.site ? String(actionAny.site) : "inconnu";
+    console.log(`[orchestrator]   [extract] → Extraction LLM (${pageHtml.length} caractères)...`);
     const result = await extractJobsTool.execute({
       html: pageHtml,
       url: finalUrl,
       siteHint,
       queryContext: this.state.goal,
     });
+    console.log(`[orchestrator]   [extract] ✓ ${result.jobs?.length || 0} offre(s) extraite(s)`);
 
     return result;
   }
@@ -310,9 +332,11 @@ export class AgentOrchestrator {
     );
 
     if (jobsToScore.length === 0) {
+      console.log(`[orchestrator]   [score] ⏭️  Aucune offre à scorer`);
       return { success: true, scoredJobs: [], skipped: true };
     }
 
+    console.log(`[orchestrator]   [score] → Scoring de ${jobsToScore.length} offre(s)...`);
     const result = await scoreJobsTool.execute({
       jobs: jobsToScore,
       criteria: {
@@ -323,6 +347,7 @@ export class AgentOrchestrator {
         minScore: this.config.minScoreThreshold,
       },
     });
+    console.log(`[orchestrator]   [score] ✓ ${result.scoredJobs?.length || 0} offre(s) scorée(s)`);
 
     return result;
   }

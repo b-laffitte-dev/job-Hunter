@@ -125,16 +125,20 @@ async function handleChatMessage(
   userMessage: string,
 ): Promise<void> {
   const session = getSession(sessionId);
+  console.log(`[chat] Message utilisateur: "${userMessage}"`);
   session.history.push({ role: "user", content: userMessage });
 
   let result;
   try {
+    console.log(`[chat] → Appel interpretMessage...`);
     result = await interpretMessage(
       session.state,
       userMessage,
       session.history,
     );
+    console.log(`[chat] ✓ Action interprétée: ${result.action.type}`);
   } catch (e) {
+    console.log(`[chat] ✗ Erreur interpretMessage: ${(e as Error).message}`);
     ws.send(JSON.stringify({ type: "error", error: (e as Error).message }));
     return;
   }
@@ -142,6 +146,7 @@ async function handleChatMessage(
   session.history.push({ role: "assistant", content: result.reply });
 
   if (result.action.type === "answer") {
+    console.log(`[chat] → Réponse simple: "${result.reply}"`);
     ws.send(
       JSON.stringify({
         type: "message",
@@ -153,6 +158,7 @@ async function handleChatMessage(
   }
 
   // update / reset / search : on met à jour l'état
+  console.log(`[chat] → Mise à jour de l'état (action: ${result.action.type})`);
   session.state = result.action.state;
   ws.send(
     JSON.stringify({
@@ -166,6 +172,7 @@ async function handleChatMessage(
   // Si l'action est "search", on lance le pipeline
   if (result.action.type === "search") {
     if (session.running) {
+      console.log(`[chat] ⚠ Recherche déjà en cours`);
       ws.send(
         JSON.stringify({
           type: "status",
@@ -175,10 +182,13 @@ async function handleChatMessage(
       return;
     }
     session.running = true;
+    console.log(`[chat] → Démarrage de la recherche (query: "${session.state.search.query}", location: "${session.state.search.location}")`);
     ws.send(JSON.stringify({ type: "status", status: "Recherche lancée..." }));
     try {
       const config = buildConfigFromState(session.state);
+      console.log(`[chat] → runWithConfig démarre...`);
       const runResult = await runWithConfig(config);
+      console.log(`[chat] ✓ Recherche terminée: ${runResult.retainedAfterScore} offres retenues sur ${runResult.totalScraped} scrapées`);
       const jobs = runResult.jobs ?? loadLatest();
       ws.send(
         JSON.stringify({
@@ -188,9 +198,11 @@ async function handleChatMessage(
         }),
       );
     } catch (e) {
+      console.log(`[chat] ✗ Erreur recherche: ${(e as Error).message}`);
       ws.send(JSON.stringify({ type: "error", error: (e as Error).message }));
     } finally {
       session.running = false;
+      console.log(`[chat] → Recherche terminée, session libre`);
     }
   }
 }
@@ -250,6 +262,7 @@ export function startServer(): { url: string; close: () => void } {
     const url = new URL(req.url ?? "/chat", "http://localhost");
     const sessionId = url.searchParams.get("sessionId") ?? "default";
     const session = getSession(sessionId);
+    console.log(`[server] ✓ Nouvelle connexion WebSocket (session: ${sessionId})`);
     ws.send(
       JSON.stringify({
         type: "ready",
@@ -258,16 +271,20 @@ export function startServer(): { url: string; close: () => void } {
       }),
     );
     ws.on("message", (data) => {
+      console.log(`[server] ← Message reçu (session: ${sessionId}, taille: ${data.toString().length} bytes)`);
       let msg: { type: string; message?: string };
       try {
         msg = JSON.parse(data.toString());
+        console.log(`[server] ← Type: ${msg.type}, Message: ${msg.message?.slice(0, 100) || '(vide)'}`);
       } catch {
+        console.log(`[server] ✗ Message JSON invalide`);
         ws.send(
           JSON.stringify({ type: "error", error: "Message JSON invalide" }),
         );
         return;
       }
       if (msg.type === "chat" && msg.message) {
+        console.log(`[server] → Traitement du message utilisateur...`);
         handleChatMessage(ws, sessionId, msg.message).catch((e) =>
           ws.send(
             JSON.stringify({ type: "error", error: (e as Error).message }),
