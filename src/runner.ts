@@ -1,11 +1,9 @@
 import { loadConfig } from "./config/index.js";
-import { expandKeywords } from "./llm/keywords.js";
-import { scoreJobs } from "./llm/scoring.js";
-import { scrapeAll } from "./scrapers/index.js";
+import { agent } from "./agent/index.js";
+import { resetGlobalLLMCounter } from "./agent/llmCounter.js";
 import {
   loadSeen,
   saveSeen,
-  isNewOffer,
   markSeen,
   saveLatest,
   archiveRun,
@@ -16,6 +14,7 @@ import { resolveDataDir, ensureHomeDir } from "./paths.js";
 import { resolve } from "node:path";
 import { writeFileSync } from "node:fs";
 import type { AppConfig, JobOffer, ScoredJob } from "./types/index.js";
+import type { AgentResult } from "./agent/types.js";
 
 export interface RunResult {
   runId: string;
@@ -35,74 +34,71 @@ export async function runOnce(configPath?: string): Promise<RunResult> {
 export async function runWithConfig(config: AppConfig): Promise<RunResult> {
   const runId = new Date().toISOString().replace(/[:.]/g, "-");
 
-  console.log(`\n=== Job Hunter AI - run ${runId} ===`);
-  console.log(
-    `Requête: "${config.search.query}" | Lieu: ${config.search.location}`,
-  );
+  // Réinitialiser le compteur LLM pour cette exécution
+  resetGlobalLLMCounter();
 
-  // 1. Génération de mots-clés par le LLM
-  let expanded: string[] = config.criteria.keywords.slice();
+  // Construire l'objectif de recherche à partir de la config
+  const goal = `${config.search.query} ${config.search.location}`.trim();
+
+  console.log(`\n=== Job Hunter AI (Agent Mode) - run ${runId} ===`);
+  console.log(`Objectif: "${goal}"`);
+  console.log(`Limites: ${config.search.maxResultsPerSource} résultats max par source`);
+
   try {
-    const expansion = await expandKeywords(config);
-    expanded = expansion.expanded;
-    console.log(
-      `[llm] ${expanded.length} mots-clés étendus: ${expanded.slice(0, 8).join(", ")}...`,
-    );
-  } catch (e) {
-    console.warn(
-      `[llm] expansion échouée, utilisation des mots-clés de base: ${(e as Error).message}`,
-    );
-  }
+    // Exécuter la recherche pilotée par l'Agent IA
+    const agentResult: AgentResult = await agent.run(goal);
 
-  // 2. Scraping de toutes les sources
-  const offers = await scrapeAll(config, expanded);
-  console.log(`[scrape] ${offers.length} offres brutes récupérées`);
+    // Traiter les résultats
+    const scored = agentResult.jobs;
+    const totalScraped = agentResult.state.rawResults.length;
+    const newOffers = scored.length;
+    const retainedAfterScore = scored.filter(j => j.score >= config.search.minScore).length;
 
-  // 3. Filtrage des nouvelles offres (vs historique)
-  const seen = loadSeen();
-  const fresh = offers.filter((o) => isNewOffer(o, seen));
-  console.log(
-    `[store] ${fresh.length} nouvelles offres (sur ${offers.length})`,
-  );
+    console.log(`[agent] ${totalScraped} offres brutes récupérées`);
+    console.log(`[agent] ${newOffers} nouvelles offres (score >= ${config.search.minScore})`);
+    console.log(`[agent] Utilisation: ${agentResult.totalLlmCalls} appels LLM, ~${agentResult.totalTokensUsed} tokens`);
 
-  // 4. Scoring LLM des nouvelles offres
-  let scored: ScoredJob[] = [];
-  if (fresh.length > 0) {
-    scored = await scoreJobs(config, fresh, expanded);
-    const retained = scored.filter((o) => o.score >= config.search.minScore);
-    console.log(
-      `[llm] ${retained.length} offres retenues (score >= ${config.search.minScore})`,
-    );
-    scored = retained;
-  }
-
-  // 5. Persistance
-  markSeen(fresh, seen);
-  saveSeen(seen);
-  if (scored.length > 0) {
-    saveLatest(scored);
-    const archivePath = archiveRun(scored, runId);
-    // Export CSV du run (dans $HOME/.job-hunter-ai/data)
+    // Persistance supplémentaire (archivage)
     ensureHomeDir();
     const dataDir = resolveDataDir();
     ensureDir(dataDir);
-    const csvPath = resolve(dataDir, `run-${runId}.csv`);
-    writeFileSync(csvPath, toCSV(scored), "utf-8");
-    console.log(`[store] archivé: ${archivePath} (csv: ${csvPath})`);
-  } else {
-    archiveRun([], runId);
-    console.log("[store] aucune offre retenue");
-  }
+    
+    if (scored.length > 0) {
+      saveLatest(scored);
+      const archivePath = archiveRun(scored, runId);
+      const csvPath = resolve(dataDir, `run-${runId}.csv`);
+      writeFileSync(csvPath, toCSV(scored), "utf-8");
+      console.log(`[store] archivé: ${archivePath} (csv: ${csvPath})`);
+    } else {
+      archiveRun([], runId);
+      console.log("[store] aucune offre retenue");
+    }
 
-  return {
-    runId,
-    expandedKeywords: expanded,
-    totalScraped: offers.length,
-    newOffers: fresh.length,
-    retainedAfterScore: scored.length,
-    archivePath: resolve("data", "history", `run-${runId}.json`),
-    jobs: scored,
-  };
+    return {
+      runId,
+      expandedKeywords: [], // Plus utilisé dans le mode agent
+      totalScraped,
+      newOffers,
+      retainedAfterScore,
+      archivePath: resolve("data", "history", `run-${runId}.json`),
+      jobs: scored,
+    };
+  } catch (error) {
+    console.error(`[agent] Erreur lors de l'exécution: ${(error as Error).message}`);
+    
+    // Fallback: archiver un run vide
+    archiveRun([], runId);
+    
+    return {
+      runId,
+      expandedKeywords: [],
+      totalScraped: 0,
+      newOffers: 0,
+      retainedAfterScore: 0,
+      archivePath: resolve("data", "history", `run-${runId}.json`),
+      jobs: [],
+    };
+  }
 }
 
 export type { JobOffer, ScoredJob };
