@@ -17,7 +17,9 @@ case "$ARCH" in
   *) echo "Architecture non supportée: $ARCH"; exit 1 ;;
 esac
 
-echo "🤖 Installation de Job Hunter AI (macOS $ASSET_ARCH)"
+# Détection de la version macOS pour un message plus précis
+OS_VERSION=$(sw_vers -productVersion | cut -d. -f1,2)
+echo "🤖 Installation de Job Hunter AI (macOS $OS_VERSION - $ASSET_ARCH)"
 
 # Répertoire d'installation
 if [[ -w "/usr/local/bin" ]]; then

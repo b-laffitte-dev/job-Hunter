@@ -28,8 +28,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Apple Silicon (M1/M2/M3/M4) — disponible et rapide
-          - runner: macos-14
+          # Apple Silicon (M1/M2/M3/M4/M5) - macOS Tahoe 26 (arm64)
+          - runner: macos-16
+            arch: arm64
+            asset_suffix: darwin-arm64
+          # macOS Sequoia 15 (arm64) - fallback si macos-16 non disponible
+          - runner: macos-15
             arch: arm64
             asset_suffix: darwin-arm64
           # Intel — runner macos-13 a une disponibilité limitée sur GitHub Actions gratuit.
@@ -45,7 +49,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "26"
           check-latest: true
 
       - name: Install dependencies
@@ -81,7 +85,7 @@ jobs:
           # Supprime la signature existante (nécessaire avant injection sur macOS)
           codesign --remove-signature dist/job-hunter-ai || true
           # Injecte le blob SEA dans le binaire copié (postject syntaxe récente + segment Mach-O explicite)
-          npx --yes postject dist/job-hunter-ai NODE_SEA_BLOB dist/sea-prep.blob \
+          npx postject dist/job-hunter-ai NODE_SEA_BLOB dist/sea-prep.blob \
             --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 \
             --macho-segment-name NODE_SEA
 
