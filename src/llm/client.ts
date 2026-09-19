@@ -196,8 +196,13 @@ Règles:
 
 /**
  * Démarre une nouvelle conversation avec l'agent
+ * Retourne la conversation ET la réponse complète pour vérifier si déjà terminée
  */
-export async function startConversation(userMessage: string): Promise<MistralConversation> {
+export async function startConversation(userMessage: string): Promise<{
+  conversation: MistralConversation;
+  responseData: any;
+  isComplete: boolean;
+}> {
   const config = loadMistralConfig();
   const agent = await createAgent();
   
@@ -223,6 +228,7 @@ export async function startConversation(userMessage: string): Promise<MistralCon
 
   const responseData: any = await response.json();
   console.log(`[llm/client] API response:`, responseData);
+  
   const conversation: MistralConversation = {
     id: responseData.conversation_id || responseData.id,
     agentId: agent.id,
@@ -233,7 +239,63 @@ export async function startConversation(userMessage: string): Promise<MistralCon
   currentConversation = conversation;
   console.log(`[llm/client] ✓ Conversation démarrée: ${conversation.id}`);
   
-  return conversation;
+  // Check if conversation is already complete (has message.output in outputs)
+  const isComplete = checkConversationComplete(responseData);
+  console.log(`[llm/client] Conversation déjà complète: ${isComplete}`);
+  
+  return { conversation, responseData, isComplete };
+}
+
+/**
+ * Check if conversation response is already complete
+ */
+function checkConversationComplete(responseData: any): boolean {
+  if (!responseData) return false;
+  
+  // Check if there's a message.output in outputs
+  if (responseData.outputs && Array.isArray(responseData.outputs)) {
+    return responseData.outputs.some((o: any) => 
+      o.type === 'message.output' || o.object === 'message.output'
+    );
+  }
+  
+  return false;
+}
+
+/**
+ * Extract MistralMessage array from outputs (used when conversation is already complete)
+ */
+function extractMessagesFromOutputs(outputs: any[]): MistralMessage[] {
+  const messages: MistralMessage[] = [];
+  
+  for (const output of outputs) {
+    // Handle message.output type
+    if (output.type === 'message.output' || output.object === 'message.output') {
+      const contentText = typeof output.content === 'string' ? output.content : 
+                        (output.text ? output.text : JSON.stringify(output.content || output));
+      messages.push({
+        role: output.role || "assistant",
+        content: [{
+          type: "text",
+          text: contentText,
+        }],
+      });
+    }
+    // Handle legacy message format
+    else if (output.type === 'message' || output.object === 'message') {
+      const contentText = typeof output.content === 'string' ? output.content : 
+                        (output.text ? output.text : JSON.stringify(output.content || output));
+      messages.push({
+        role: output.role || "assistant",
+        content: [{
+          type: "text",
+          text: contentText,
+        }],
+      });
+    }
+  }
+  
+  return messages;
 }
 
 /**
@@ -255,10 +317,46 @@ export async function getConversationStatus(conversationId: string): Promise<str
     }
 
     const responseData: any = await response.json();
-    return responseData.status || responseData.state || "active";
-  } catch {
+    console.log(`[llm/client] Status check response keys:`, Object.keys(responseData));
+    
+    // Check various possible status fields
+    // Mistral Conversations API may return status at root level or in different fields
+    const status = responseData.status || 
+                   responseData.state || 
+                   responseData.conversation_status ||
+                   (responseData.outputs && responseData.outputs.length > 0 ? 
+                     getOutputsStatus(responseData.outputs) : null) ||
+                   "active";
+    
+    console.log(`[llm/client] Status détecté: ${status}`);
+    return status;
+  } catch (e) {
+    console.log(`[llm/client] ✗ Erreur getConversationStatus: ${(e as Error).message}`);
     return "unknown";
   }
+}
+
+/**
+ * Helper to determine conversation status from outputs array
+ */
+function getOutputsStatus(outputs: any[]): string | null {
+  if (!outputs || outputs.length === 0) return null;
+  
+  // Check if there's a message.output in the outputs (conversation is complete)
+  const hasMessageOutput = outputs.some(o => o.type === 'message.output' || o.object === 'message.output');
+  if (hasMessageOutput) {
+    return "completed";
+  }
+  
+  // Check if all tool executions are completed
+  const allToolsCompleted = outputs.every(o => 
+    o.type === 'tool.execution' && o.completed_at
+  );
+  if (allToolsCompleted && outputs.length > 0) {
+    return "completed";
+  }
+  
+  return null;
 }
 
 /**
@@ -272,12 +370,13 @@ export async function waitForConversationCompletion(conversationId: string, time
     const status = await getConversationStatus(conversationId);
     console.log(`[llm/client] Statut conversation: ${status}`);
     
-    if (status === "completed" || status === "finished" || status === "done") {
+    // Check for all possible completed states
+    if (status === "completed" || status === "finished" || status === "done" || status === "ended") {
       console.log(`[llm/client] ✓ Conversation terminée`);
       return;
     }
     
-    if (status === "error" || status === "failed") {
+    if (status === "error" || status === "failed" || status === "cancelled") {
       throw new Error(`Conversation échouée avec statut: ${status}`);
     }
     
@@ -290,11 +389,13 @@ export async function waitForConversationCompletion(conversationId: string, time
 
 /**
  * Récupère les messages d'une conversation
+ * Mistral Conversations API returns outputs, not messages
  */
 export async function getConversationMessages(conversationId: string): Promise<MistralMessage[]> {
   const config = loadMistralConfig();
   
-  const response = await fetch(`${config.CONVERSATIONS_API_URL}/${conversationId}/messages`, {
+  // Try the conversation endpoint first (which includes outputs)
+  const response = await fetch(`${config.CONVERSATIONS_API_URL}/${conversationId}`, {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${config.API_KEY}`,
@@ -303,27 +404,62 @@ export async function getConversationMessages(conversationId: string): Promise<M
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    console.log(`[llm/client] ✗ Erreur récupération messages: ${response.status} - ${errorText.slice(0, 200)}`);
-    throw new Error(`Erreur récupération messages: ${response.status} - ${errorText.slice(0, 200)}`);
+    console.log(`[llm/client] ✗ Erreur récupération conversation: ${response.status} - ${errorText.slice(0, 200)}`);
+    throw new Error(`Erreur récupération conversation: ${response.status} - ${errorText.slice(0, 200)}`);
   }
 
   const responseData: any = await response.json();
-  console.log(`[llm/client] Messages API response:`, JSON.stringify(responseData, null, 2));
+  console.log(`[llm/client] Conversation API response keys:`, Object.keys(responseData));
   
   // Transform Mistral Conversations API response to our MistralMessage format
-  const messages: MistralMessage[] = (responseData.messages || []).map((msg: any) => {
-    const contentText = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-    return {
-      role: msg.role || "assistant",
-      content: [{
-        type: "text",
-        text: contentText,
-        // Mistral Conversations API may include tool references in a different format
-        // We'll extract them from the content text if needed
-      }],
-    };
-  });
+  // The API returns outputs array with tool executions and message outputs
+  const messages: MistralMessage[] = [];
   
+  // Handle outputs array (Mistral Conversations API format)
+  if (responseData.outputs && Array.isArray(responseData.outputs)) {
+    for (const output of responseData.outputs) {
+      // Handle message.output type
+      if (output.type === 'message.output' || output.object === 'message.output') {
+        const contentText = typeof output.content === 'string' ? output.content : 
+                          (output.text ? output.text : JSON.stringify(output.content || output));
+        messages.push({
+          role: output.role || "assistant",
+          content: [{
+            type: "text",
+            text: contentText,
+          }],
+        });
+      }
+      // Handle legacy message format
+      else if (output.type === 'message' || output.object === 'message') {
+        const contentText = typeof output.content === 'string' ? output.content : 
+                          (output.text ? output.text : JSON.stringify(output.content || output));
+        messages.push({
+          role: output.role || "assistant",
+          content: [{
+            type: "text",
+            text: contentText,
+          }],
+        });
+      }
+    }
+  }
+  
+  // Fallback: try messages array if outputs is not available
+  if (messages.length === 0 && responseData.messages && Array.isArray(responseData.messages)) {
+    for (const msg of responseData.messages) {
+      const contentText = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+      messages.push({
+        role: msg.role || "assistant",
+        content: [{
+          type: "text",
+          text: contentText,
+        }],
+      });
+    }
+  }
+  
+  console.log(`[llm/client] Messages extraits: ${messages.length}`);
   return messages;
 }
 
@@ -335,7 +471,7 @@ export async function searchJobs(query: string, location?: string): Promise<Agen
   console.log(`[llm/client] → Recherche d'offres: "${searchQuery}"`);
   
   try {
-    const conversation = await startConversation(
+    const { conversation, responseData, isComplete } = await startConversation(
       `Trouve des offres d'emploi ACTUELLES pour: ${searchQuery}. ` +
       `IMPORTANT: Pour CHAQUE offre, trouve l'URL DIRECTE vers l'annonce (pas une page de recherche générique). ` +
       `Formate les résultats en JSON avec les champs: titre, entreprise, lieu, url, description, typeContrat, salaire. ` +
@@ -343,10 +479,20 @@ export async function searchJobs(query: string, location?: string): Promise<Agen
       `VERIFIE que chaque URL est valide et accessible. Réponds UNIQUEMENT en français.`
     );
 
-    console.log(`[llm/client] Attente de la fin du traitement Mistral...`);
-    await waitForConversationCompletion(conversation.id, 30000);
-    console.log(`[llm/client] Récupération des messages pour conversation: ${conversation.id}`);
-    const messages = await getConversationMessages(conversation.id);
+    let messages: MistralMessage[] = [];
+    
+    // If conversation is already complete (has outputs with message), extract messages from responseData
+    if (isComplete && responseData?.outputs) {
+      console.log(`[llm/client] Conversation déjà complète, extraction directe des messages`);
+      messages = extractMessagesFromOutputs(responseData.outputs);
+    } else {
+      // Otherwise, wait for completion and fetch messages
+      console.log(`[llm/client] Attente de la fin du traitement Mistral...`);
+      await waitForConversationCompletion(conversation.id, 30000);
+      console.log(`[llm/client] Récupération des messages pour conversation: ${conversation.id}`);
+      messages = await getConversationMessages(conversation.id);
+    }
+    
     const assistantMessage = messages.find((m) => m.role === 'assistant');
     
     if (!assistantMessage) {
@@ -554,13 +700,11 @@ function parseJobResultsManually(text: string, query: string, references: string
 
 /**
  * Fonction utilitaire pour extraire du JSON d'une chaîne de texte
+ * Utilise le depth counting qui est plus robuste que les regex pour les blocs imbriqués
  */
 export function extractJson<T>(text: string): T {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidate = fenced ? fenced[1] : text;
-  
-  const start = candidate.indexOf("{");
-  const startArr = candidate.indexOf("[");
+  const start = text.indexOf('{');
+  const startArr = text.indexOf('[');
   let s = -1;
   if (start === -1) s = startArr;
   else if (startArr === -1) s = start;
@@ -572,29 +716,49 @@ export function extractJson<T>(text: string): T {
   let inStr = false;
   let esc = false;
   
-  for (let i = s; i < candidate.length; i++) {
-    const c = candidate[i];
+  for (let i = s; i < text.length; i++) {
+    const c = text[i];
     if (inStr) {
       if (esc) esc = false;
-      else if (c === "\\") esc = true;
+      else if (c === '\\') esc = true;
       else if (c === '"') inStr = false;
       continue;
     }
-    if (c === '"') inStr = true;
-    else if (c === "{" || c === "[") depth++;
-    else if (c === "}" || c === "]") {
+    if (c === '"') {
+      inStr = true;
+    } else if (c === '{' || c === '[') {
+      depth++;
+    } else if (c === '}' || c === ']') {
       depth--;
       if (depth === 0) {
-        const slice = candidate.slice(s, i + 1);
+        const slice = text.slice(s, i + 1);
         try {
           return JSON.parse(slice) as T;
         } catch {
           const corrected = fixJsonStrings(slice);
-          return JSON.parse(corrected) as T;
+          try {
+            return JSON.parse(corrected) as T;
+          } catch {
+            // Parse error - continue searching for another JSON block
+            // Reset and look for next { or [
+            const nextStart = text.indexOf('{', i + 1);
+            const nextStartArr = text.indexOf('[', i + 1);
+            if (nextStart === -1 && nextStartArr === -1) {
+              break;
+            }
+            s = nextStart === -1 ? nextStartArr : 
+                (nextStartArr === -1 ? nextStart : Math.min(nextStart, nextStartArr));
+            if (s === -1) break;
+            i = s - 1; // Reset to new start position
+            depth = 0;
+            inStr = false;
+            esc = false;
+          }
         }
       }
     }
   }
+  
   throw new Error("JSON incomplet dans la réponse LLM");
 }
 
