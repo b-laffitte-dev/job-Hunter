@@ -33,86 +33,38 @@ function setStatus(text, cls) {
 
 function renderState(state) {
   const s = state.search;
-  const c = state.criteria;
-  const a = state.agent || {};
   const lines = [
-    `Requête : ${s.query}`,
-    `Lieu : ${s.location}`,
-    `Offres max/source : ${s.maxResultsPerSource}`,
-    `Score min : ${s.minScore}`,
-    ``,
-    `Mots-clés : ${(c.keywords || []).join(", ")}`,
-    `Exclusions : ${(c.excludeKeywords || []).join(", ") || "—"}`,
-    `Expérience : ${c.experience || "—"}`,
-    `Contrats : ${(c.contractTypes || []).join(", ") || "tous"}`,
-    `Télétravail : ${c.remoteOk ? "oui" : "non"}`,
-    `Salaire max : ${c.maxSalary ?? "—"}`,
+    `Requête : ${s.query || "—"}`,
+    `Lieu : ${s.location || "—"}`,
+    `Max offres : ${s.maxResults || 10}`,
   ];
   
-  // Ajouter les paramètres de l'agent s'ils existent
-  if (Object.keys(a).length > 0) {
-    lines.push("", `Paramètres de l'agent:`);
-    if (a.maxLlmCalls != null) lines.push(`- Appels LLM max: ${a.maxLlmCalls}`);
-    if (a.maxTokens != null) lines.push(`- Tokens max: ${a.maxTokens}`);
-    if (a.maxSteps != null) lines.push(`- Étapes max: ${a.maxSteps}`);
-    if (a.satisfactionThreshold != null) lines.push(`- Seuil satisfaction: ${a.satisfactionThreshold}%`);
-    if (a.autoExtract != null) lines.push(`- Extraction auto: ${a.autoExtract ? "oui" : "non"}`);
-    if (a.maxUrlsPerSearch != null) lines.push(`- URLs max/scrap: ${a.maxUrlsPerSearch}`);
-    
-    // Mettre à jour les valeurs des inputs de configuration
-    updateAgentConfigInputs(a);
-  }
-  
   stateEl.textContent = lines.join("\n");
-}
-
-function updateAgentConfigInputs(agentConfig) {
-  const inputs = {
-    maxLlmCalls: document.getElementById("maxLlmCalls"),
-    maxTokens: document.getElementById("maxTokens"),
-    maxSteps: document.getElementById("maxSteps"),
-    satisfactionThreshold: document.getElementById("satisfactionThreshold"),
-    autoExtract: document.getElementById("autoExtract"),
-    maxUrlsPerSearch: document.getElementById("maxUrlsPerSearch"),
-  };
-  
-  if (inputs.maxLlmCalls) inputs.maxLlmCalls.value = agentConfig.maxLlmCalls ?? 20;
-  if (inputs.maxTokens) inputs.maxTokens.value = agentConfig.maxTokens ?? 50000;
-  if (inputs.maxSteps) inputs.maxSteps.value = agentConfig.maxSteps ?? 30;
-  if (inputs.satisfactionThreshold) inputs.satisfactionThreshold.value = agentConfig.satisfactionThreshold ?? 80;
-  if (inputs.autoExtract) inputs.autoExtract.value = String(agentConfig.autoExtract ?? true);
-  if (inputs.maxUrlsPerSearch) inputs.maxUrlsPerSearch.value = agentConfig.maxUrlsPerSearch ?? 2;
-}
-
-function scoreClass(score) {
-  if (score >= 75) return "high";
-  if (score >= 50) return "mid";
-  return "low";
 }
 
 function renderJobs(jobs) {
   jobs = Array.isArray(jobs) ? jobs : [];
   countEl.textContent = String(jobs.length);
+  
   if (jobs.length === 0) {
     jobsEl.innerHTML = `<div class="empty">Aucune offre pour l'instant. Lancez une recherche via le chat.</div>`;
     return;
   }
+  
   jobsEl.innerHTML = jobs
     .map((j) => {
       const meta = [j.company, j.location, j.contractType, j.source]
         .filter(Boolean)
         .join(" · ");
       const salary = j.salary ? ` · ${esc(j.salary)}` : "";
-      const reasons = j.scoreReasons && j.scoreReasons.length
-        ? `<div class="job-reasons">${esc(j.scoreReasons.join(" ; "))}</div>`
-        : "";
+      const description = j.description ? `<div class="job-desc">${esc(j.description.slice(0, 200))}${j.description.length > 200 ? "..." : ""}</div>` : "";
+      
       return `<div class="job">
         <div class="job-head">
           <a class="job-title" href="${esc(j.url)}" target="_blank" rel="noopener">${esc(j.title)}</a>
-          <span class="score ${scoreClass(j.score)}">${j.score}/100</span>
         </div>
         <div class="job-meta">${esc(meta)}${salary}</div>
-        ${reasons}
+        ${description}
       </div>`;
     })
     .join("");
@@ -134,6 +86,7 @@ function connect() {
     } catch {
       return;
     }
+    
     switch (msg.type) {
       case "ready":
         if (msg.state) renderState(msg.state);
@@ -145,17 +98,16 @@ function connect() {
         addBubble(msg.reply, "bot");
         break;
       case "update":
-        addBubble(msg.reply, "bot");
         if (msg.state) renderState(msg.state);
         break;
       case "status":
         addBubble(msg.status, "system");
-        if (/lancée|cours/i.test(msg.status)) setStatus(msg.status, "running");
+        if (/lancée|cours|recherche/i.test(msg.status)) setStatus(msg.status, "running");
         break;
       case "results":
         if (msg.jobs) renderJobs(msg.jobs);
         setStatus(
-          `✓ ${msg.run?.retainedAfterScore ?? 0} offre(s) retenue(s) sur ${msg.run?.totalScraped ?? 0} scrapées`,
+          `✓ ${msg.totalResults || msg.jobs?.length || 0} offre(s) trouvée(s)`,
           "",
         );
         break;
@@ -191,34 +143,6 @@ formEl.addEventListener("submit", (e) => {
   send(text);
   inputEl.value = "";
 });
-
-// Sauvegarder les paramètres de l'agent
-const saveAgentConfigBtn = document.getElementById("saveAgentConfig");
-if (saveAgentConfigBtn) {
-  saveAgentConfigBtn.addEventListener("click", () => {
-    const agentConfig = {
-      maxLlmCalls: parseInt(document.getElementById("maxLlmCalls")?.value) || 20,
-      maxTokens: parseInt(document.getElementById("maxTokens")?.value) || 50000,
-      maxSteps: parseInt(document.getElementById("maxSteps")?.value) || 10,
-      satisfactionThreshold: parseInt(document.getElementById("satisfactionThreshold")?.value) || 80,
-      autoExtract: document.getElementById("autoExtract")?.value === "true",
-      maxUrlsPerSearch: parseInt(document.getElementById("maxUrlsPerSearch")?.value) || 2,
-    };
-    
-    // Envoyer au serveur via WebSocket
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
-        type: "update",
-        message: "Mise à jour des paramètres de l'agent",
-        state: { agent: agentConfig }
-      }));
-      addBubble("Paramètres de l'agent mis à jour", "system");
-      setStatus("Paramètres sauvegardés", "ok");
-    } else {
-      setStatus("Impossible de sauvegarder : socket non connectée", "error");
-    }
-  });
-}
 
 connect();
 

@@ -1,18 +1,16 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { runOnce } from "./runner.js";
 import { startServer } from "./server.js";
-import { loadEnv } from "./config/index.js";
+import { loadEnv } from "./env.js";
 
 const program = new Command();
 
 program
   .name("job-hunter-ai")
-  .description("Agent IA de recherche d'emploi - 100% interactif")
-  .option("--once", "Exécute une seule recherche puis quitte")
-  .option("--config <path>", "Chemin vers le fichier de configuration")
+  .description("Chat IA de recherche d'emploi avec Mistral Agents API - 100% interactif")
   .option("--serve", "Démarre l'interface de chat web interactive")
   .action(async (opts) => {
+    // Charger les variables d'environnement
     try {
       loadEnv();
     } catch (e) {
@@ -27,6 +25,7 @@ program
           `Interface de chat démarrée: ${srv.url} (Ctrl+C pour arrêter).`,
         );
         const shutdown = () => {
+          console.log("\nFermeture du serveur...");
           srv.close();
           process.exit(0);
         };
@@ -39,16 +38,10 @@ program
       return;
     }
 
-    // Mode par défaut : une seule exécution
-    try {
-      const res = await runOnce(opts.config);
-      console.log(
-        `Run terminé: ${res.retainedAfterScore} offre(s) retenue(s) sur ${res.totalScraped} scrapées (${res.newOffers} nouvelles).`,
-      );
-    } catch (e) {
-      console.error(`Run échoué: ${(e as Error).message}`);
-      process.exit(1);
-    }
+    // Si aucune option n'est spécifiée, démarrer le serveur par défaut
+    console.log("Aucune option spécifiée. Utilisez --serve pour démarrer l'interface de chat.");
+    console.log("Exemple: npm run serve");
+    process.exit(0);
   });
 
 program.parseAsync(process.argv);

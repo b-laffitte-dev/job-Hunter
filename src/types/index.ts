@@ -1,60 +1,62 @@
-export interface JobOffer {
-  id: string;
-  source: string;
-  title: string;
-  company: string | null;
-  location: string | null;
-  url: string;
-  description: string | null;
-  contractType: string | null;
-  salary: string | null;
-  publishedAt: string | null;
-  rawFetchedAt: string;
-  score?: number;
-  scoreReasons?: string[];
+// Types simplifiés pour le chat IA de recherche d'emploi
+
+// Message de chat
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
 }
 
-export interface ScoredJob extends JobOffer {
-  score: number;
-  scoreReasons: string[];
-  expandedKeywords: string[];
-}
-
-export interface KeywordExpansion {
-  original: string;
-  expanded: string[];
-  synonyms: string[];
-  relatedTerms: string[];
-}
-
-export type SourceType = "francetravail" | "indeed" | "leboncoin" | "generic";
-
-export interface SourceConfig {
-  name: string;
-  type: SourceType;
-  enabled: boolean;
-  baseUrl?: string;
-  needsPuppeteer?: boolean;
-}
-
-export interface SearchConfig {
+// Requête de recherche
+export interface SearchRequest {
   query: string;
-  location: string;
-  maxResultsPerSource: number;
-  minScore: number;
+  location?: string;
+  maxResults?: number;
 }
 
-export interface CriteriaConfig {
-  keywords: string[];
-  excludeKeywords: string[];
-  experience: string;
-  contractTypes: string[];
-  remoteOk: boolean;
-  maxSalary: number | null;
+// Résultat d'une offre d'emploi
+export interface JobResult {
+  title: string;
+  company?: string;
+  location?: string;
+  url: string;
+  description?: string;
+  source?: string;
+  contractType?: string;
+  salary?: string;
+  publishedAt?: string;
 }
 
-export interface AppConfig {
-  search: SearchConfig;
-  criteria: CriteriaConfig;
-  sources: SourceConfig[];
+// Résultat de la recherche
+export interface SearchResult {
+  jobs: JobResult[];
+  query: string;
+  totalResults: number;
+  references?: string[]; // URLs des sources utilisées
+}
+
+// État de la session de chat
+export interface ChatState {
+  search: SearchRequest;
+}
+
+// Action à effectuer après l'interprétation d'un message
+export type ChatActionType = 'update' | 'search' | 'reset' | 'answer';
+
+export interface ChatAction {
+  type: ChatActionType;
+  message: string;
+  state?: ChatState;
+}
+
+// Réponse de l'interprétation LLM
+export interface InterpretationResult {
+  action: ChatAction;
+  reply: string;
+}
+
+// Résultat d'une conversation avec l'agent
+export interface ConversationResult {
+  messages: ChatMessage[];
+  jobResults?: JobResult[];
+  references?: string[]; // URLs sources
 }
