@@ -1,7 +1,7 @@
 {
   "name": "job-hunter-ai",
   "version": "0.1.0",
-  "description": "Agent IA autonome de recherche d'emploi (scraping FR, mots-clés + scoring LLM, planification et alertes email)",
+  "description": "Agent IA de recherche d'emploi (scraping FR, mots-clés + scoring LLM) - 100% interactif avec IHM chat",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -35,8 +35,6 @@
     "commander": "^15.0.0",
     "dotenv": "^18.0.1",
     "fast-levenshtein": "^3.0.0",
-    "node-cron": "^4.6.0",
-    "nodemailer": "^10.0.10",
     "puppeteer": "^25.11.0",
     "undici": "^8.10.2",
     "ws": "^8.18.0",
@@ -44,8 +42,6 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
-    "@types/node-cron": "^3.0.11",
-    "@types/nodemailer": "^8.0.2",
     "@types/ws": "^8.5.12",
     "esbuild": "^0.28.2",
     "prettier": "^3.3.3",

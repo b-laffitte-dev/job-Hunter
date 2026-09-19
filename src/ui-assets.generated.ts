@@ -1,15 +1,10 @@
 // AUTO-GÉNÉRÉ par scripts/gen-ui-assets.mjs — NE PAS ÉDITER À LA MAIN
 // Contenu de l'UI web embarqué dans le binaire (SEA) pour servir sans fichiers externes.
 
-export interface UiAsset {
-  mime: string;
-  body: string;
-}
+export interface UiAsset { mime: string; body: string; }
 
 export const UI_ASSETS: Record<string, UiAsset> = {
-  "/app.js": {
-    mime: "text/javascript; charset=utf-8",
-    body: `const chatEl = document.getElementById("chat");
+  "/app.js": { mime: "text/javascript; charset=utf-8", body: `const chatEl = document.getElementById("chat");
 const formEl = document.getElementById("composer");
 const inputEl = document.getElementById("msg");
 const sendBtn = document.getElementById("send");
@@ -178,11 +173,8 @@ fetch("/api/latest")
     if (d && Array.isArray(d.jobs)) renderJobs(d.jobs);
   })
   .catch(() => {});
-`,
-  },
-  "/": {
-    mime: "text/html; charset=utf-8",
-    body: `<!DOCTYPE html>
+` },
+  "/": { mime: "text/html; charset=utf-8", body: `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
@@ -233,11 +225,8 @@ fetch("/api/latest")
   <script src="/app.js"></script>
 </body>
 </html>
-`,
-  },
-  "/style.css": {
-    mime: "text/css; charset=utf-8",
-    body: `:root {
+` },
+  "/style.css": { mime: "text/css; charset=utf-8", body: `:root {
   --bg: #0f172a;
   --bg-panel: #1e293b;
   --bg-input: #0f172a;
@@ -436,6 +425,5 @@ footer code { color: var(--accent-2); }
 @media (max-width: 760px) {
   main { grid-template-columns: 1fr; grid-template-rows: 1.2fr 1fr; }
 }
-`,
-  },
+` }
 };

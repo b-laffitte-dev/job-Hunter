@@ -2,7 +2,6 @@ import { loadConfig } from "./config/index.js";
 import { expandKeywords } from "./llm/keywords.js";
 import { scoreJobs } from "./llm/scoring.js";
 import { scrapeAll } from "./scrapers/index.js";
-import { sendEmailAlert } from "./notifier/email.js";
 import {
   loadSeen,
   saveSeen,
@@ -90,16 +89,9 @@ export async function runWithConfig(config: AppConfig): Promise<RunResult> {
     const csvPath = resolve(dataDir, `run-${runId}.csv`);
     writeFileSync(csvPath, toCSV(scored), "utf-8");
     console.log(`[store] archivé: ${archivePath} (csv: ${csvPath})`);
-
-    // 6. Alerte email (ne pas bloquer la recherche si l'email échoue)
-    try {
-      await sendEmailAlert(scored, runId);
-    } catch (e) {
-      console.warn(`[notifier] email échoué: ${(e as Error).message}`);
-    }
   } else {
     archiveRun([], runId);
-    console.log("[store] aucune offre retenue, pas d'alerte email envoyée");
+    console.log("[store] aucune offre retenue");
   }
 
   return {
