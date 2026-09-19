@@ -31,12 +31,16 @@ Tout en français, minuscules, sans guillemets superflus.`;
       { role: "system", content: system },
       { role: "user", content: user },
     ],
-    { temperature: 0.3, maxTokens: 700 },
+    { temperature: 0.3, maxTokens: 2000 },
   );
+  
   const parsed = extractJson<ExpansionLLMResponse>(raw);
 
   // Fusion et dédoublonnage avec les mots-clés d'origine
-  const all = new Set<string>([query.toLowerCase(), ...baseKeywords.map((k) => k.toLowerCase())]);
+  const all = new Set<string>([
+    query.toLowerCase(),
+    ...baseKeywords.map((k) => k.toLowerCase()),
+  ]);
   for (const arr of [parsed.expanded, parsed.synonyms, parsed.relatedTerms]) {
     for (const k of arr ?? []) {
       const t = k.trim().toLowerCase();

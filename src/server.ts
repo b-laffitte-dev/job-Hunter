@@ -1,9 +1,17 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, extname } from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
 import { loadEnv, loadConfig } from "./config/index.js";
-import { interpretMessage, stateFromConfig, type ChatState } from "./llm/chat.js";
+import {
+  interpretMessage,
+  stateFromConfig,
+  type ChatState,
+} from "./llm/chat.js";
 import { runWithConfig } from "./runner.js";
 import { loadLatest } from "./storage/store.js";
 import { UI_ASSETS } from "./ui-assets.generated.js";
@@ -84,7 +92,9 @@ async function handleRun(
   const sessionId = body?.sessionId ?? "default";
   const session = getSession(sessionId);
   if (session.running) {
-    sendJson(res, 409, { error: "Une recherche est déjà en cours sur cette session." });
+    sendJson(res, 409, {
+      error: "Une recherche est déjà en cours sur cette session.",
+    });
     return;
   }
   if (body?.state) session.state = body.state;
@@ -94,7 +104,7 @@ async function handleRun(
     const result = await runWithConfig(config);
     sendJson(res, 200, {
       ...result,
-      jobs: loadLatest(),
+      jobs: result.jobs ?? loadLatest(),
     });
   } catch (e) {
     sendJson(res, 500, { error: (e as Error).message });
@@ -109,13 +119,21 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return data;
 }
 
-async function handleChatMessage(ws: WebSocket, sessionId: string, userMessage: string): Promise<void> {
+async function handleChatMessage(
+  ws: WebSocket,
+  sessionId: string,
+  userMessage: string,
+): Promise<void> {
   const session = getSession(sessionId);
   session.history.push({ role: "user", content: userMessage });
 
   let result;
   try {
-    result = await interpretMessage(session.state, userMessage, session.history);
+    result = await interpretMessage(
+      session.state,
+      userMessage,
+      session.history,
+    );
   } catch (e) {
     ws.send(JSON.stringify({ type: "error", error: (e as Error).message }));
     return;
@@ -148,7 +166,12 @@ async function handleChatMessage(ws: WebSocket, sessionId: string, userMessage: 
   // Si l'action est "search", on lance le pipeline
   if (result.action.type === "search") {
     if (session.running) {
-      ws.send(JSON.stringify({ type: "status", status: "Une recherche est déjà en cours." }));
+      ws.send(
+        JSON.stringify({
+          type: "status",
+          status: "Une recherche est déjà en cours.",
+        }),
+      );
       return;
     }
     session.running = true;
@@ -156,7 +179,7 @@ async function handleChatMessage(ws: WebSocket, sessionId: string, userMessage: 
     try {
       const config = buildConfigFromState(session.state);
       const runResult = await runWithConfig(config);
-      const jobs = loadLatest();
+      const jobs = runResult.jobs ?? loadLatest();
       ws.send(
         JSON.stringify({
           type: "results",
@@ -239,12 +262,16 @@ export function startServer(): { url: string; close: () => void } {
       try {
         msg = JSON.parse(data.toString());
       } catch {
-        ws.send(JSON.stringify({ type: "error", error: "Message JSON invalide" }));
+        ws.send(
+          JSON.stringify({ type: "error", error: "Message JSON invalide" }),
+        );
         return;
       }
       if (msg.type === "chat" && msg.message) {
         handleChatMessage(ws, sessionId, msg.message).catch((e) =>
-          ws.send(JSON.stringify({ type: "error", error: (e as Error).message })),
+          ws.send(
+            JSON.stringify({ type: "error", error: (e as Error).message }),
+          ),
         );
       }
     });
@@ -253,7 +280,9 @@ export function startServer(): { url: string; close: () => void } {
   const port = env.SERVE_PORT;
   const host = env.SERVE_HOST;
   server.listen(port, host, () => {
-    console.log(`\n💬 Interface de chat Job Hunter AI : http://${host}:${port}`);
+    console.log(
+      `\n💬 Interface de chat Job Hunter AI : http://${host}:${port}`,
+    );
     console.log(`   WebSocket: ws://${host}:${port}/chat`);
   });
 

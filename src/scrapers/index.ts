@@ -43,7 +43,10 @@ export async function scrapeAll(
   const offers: JobOffer[] = [];
   for (const r of results) {
     if (r.status === "fulfilled") offers.push(...r.value);
-    else console.error(`[scraper] source échouée: ${r.reason?.message ?? r.reason}`);
+    else
+      console.error(
+        `[scraper] source échouée: ${r.reason?.message ?? r.reason}`,
+      );
   }
   // Dédoublonnage global par URL/id
   const seen = new Set<string>();

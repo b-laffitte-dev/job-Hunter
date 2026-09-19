@@ -17,7 +17,10 @@
     "serve:prod": "node dist/index.js --serve",
     "typecheck": "tsc --noEmit",
     "gen:ui": "node scripts/gen-ui-assets.mjs",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "puppeteer:install": "npx puppeteer browsers install chromedriver@latest",
+    "puppeteer:install-chrome": "npx puppeteer browsers install chrome-headless-shell@stable",
+    "postinstall": "npm run puppeteer:install || echo 'Puppeteer browser installation can be done manually with: npm run puppeteer:install'"
   },
   "keywords": [
     "job",
@@ -29,22 +32,22 @@
   "license": "MIT",
   "dependencies": {
     "cheerio": "^1.0.0",
-    "commander": "^12.1.0",
-    "dotenv": "^16.4.5",
+    "commander": "^15.0.0",
+    "dotenv": "^18.0.1",
     "fast-levenshtein": "^3.0.0",
-    "node-cron": "^3.0.3",
-    "nodemailer": "^6.9.15",
-    "puppeteer": "^23.4.0",
-    "undici": "^6.20.0",
+    "node-cron": "^4.6.0",
+    "nodemailer": "^10.0.10",
+    "puppeteer": "^25.11.0",
+    "undici": "^8.10.2",
     "ws": "^8.18.0",
-    "zod": "^3.23.8"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^22.5.0",
+    "@types/node": "^26.6.2",
     "@types/node-cron": "^3.0.11",
-    "@types/nodemailer": "^6.4.16",
+    "@types/nodemailer": "^8.0.2",
     "@types/ws": "^8.5.12",
-    "esbuild": "^0.24.0",
+    "esbuild": "^0.28.2",
     "prettier": "^3.3.3",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4"

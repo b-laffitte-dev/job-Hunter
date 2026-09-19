@@ -38,7 +38,9 @@ program
     if (opts.serve) {
       try {
         const srv = startServer();
-        console.log(`Interface de chat démarrée: ${srv.url} (Ctrl+C pour arrêter).`);
+        console.log(
+          `Interface de chat démarrée: ${srv.url} (Ctrl+C pour arrêter).`,
+        );
         const shutdown = () => {
           srv.close();
           process.exit(0);

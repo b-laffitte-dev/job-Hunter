@@ -1,5 +1,9 @@
 import { chat, extractJson } from "./client.js";
-import type { AppConfig, CriteriaConfig, SearchConfig } from "../types/index.js";
+import type {
+  AppConfig,
+  CriteriaConfig,
+  SearchConfig,
+} from "../types/index.js";
 
 export interface ChatState {
   search: SearchConfig;
@@ -77,12 +81,15 @@ export function applyInterpretation(
   };
   if (interp.query != null) next.search.query = interp.query;
   if (interp.location != null) next.search.location = interp.location;
-  if (interp.maxResultsPerSource != null) next.search.maxResultsPerSource = interp.maxResultsPerSource;
+  if (interp.maxResultsPerSource != null)
+    next.search.maxResultsPerSource = interp.maxResultsPerSource;
   if (interp.minScore != null) next.search.minScore = interp.minScore;
   if (interp.keywords != null) next.criteria.keywords = interp.keywords;
-  if (interp.excludeKeywords != null) next.criteria.excludeKeywords = interp.excludeKeywords;
+  if (interp.excludeKeywords != null)
+    next.criteria.excludeKeywords = interp.excludeKeywords;
   if (interp.experience != null) next.criteria.experience = interp.experience;
-  if (interp.contractTypes != null) next.criteria.contractTypes = interp.contractTypes;
+  if (interp.contractTypes != null)
+    next.criteria.contractTypes = interp.contractTypes;
   if (interp.remoteOk != null) next.criteria.remoteOk = interp.remoteOk;
   if (interp.maxSalary != null) next.criteria.maxSalary = interp.maxSalary;
   return next;
@@ -93,9 +100,8 @@ export async function interpretMessage(
   userMessage: string,
   history: { role: "user" | "assistant"; content: string }[] = [],
 ): Promise<{ action: ChatAction; reply: string }> {
-  const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
-    { role: "system", content: SYSTEM },
-  ];
+  const messages: { role: "system" | "user" | "assistant"; content: string }[] =
+    [{ role: "system", content: SYSTEM }];
   // On injecte un historique court (max 6 échanges) pour le contexte conversationnel
   for (const m of history.slice(-12)) {
     messages.push({ role: m.role, content: m.content });
@@ -111,8 +117,11 @@ export async function interpretMessage(
     interp = extractJson<LLMInterpretation>(raw);
   } catch (e) {
     // Repli : on tente de lancer une recherche si le message contient un déclencheur, sinon on répond
-    const trigger = /\b(lance|cherche|recherche|go|lancer|trouve)\b/i.test(userMessage);
-    const reply = "Désolé, je n'ai pas pu interpréter votre message (service IA indisponible). Réessayez ou reformulez.";
+    const trigger = /\b(lance|cherche|recherche|go|lancer|trouve)\b/i.test(
+      userMessage,
+    );
+    const reply =
+      "Désolé, je n'ai pas pu interpréter votre message (service IA indisponible). Réessayez ou reformulez.";
     if (trigger) {
       return {
         action: { type: "search", message: userMessage, state },
@@ -126,15 +135,27 @@ export async function interpretMessage(
   }
 
   const reply = interp.reply?.trim() || "Compris.";
-  const nextState = interp.action === "reset" ? stateFromConfig(loadBaseConfig()) : applyInterpretation(state, interp);
+  const nextState =
+    interp.action === "reset"
+      ? stateFromConfig(loadBaseConfig())
+      : applyInterpretation(state, interp);
 
   switch (interp.action) {
     case "update":
-      return { action: { type: "update", message: userMessage, state: nextState }, reply };
+      return {
+        action: { type: "update", message: userMessage, state: nextState },
+        reply,
+      };
     case "search":
-      return { action: { type: "search", message: userMessage, state: nextState }, reply };
+      return {
+        action: { type: "search", message: userMessage, state: nextState },
+        reply,
+      };
     case "reset":
-      return { action: { type: "reset", message: userMessage, state: nextState }, reply };
+      return {
+        action: { type: "reset", message: userMessage, state: nextState },
+        reply,
+      };
     case "answer":
     default:
       return { action: { type: "answer", message: userMessage }, reply };
@@ -149,8 +170,20 @@ function loadBaseConfig(): AppConfig {
   } catch {
     // Repli minimal si la config n'est pas chargeable
     return {
-      search: { query: "", location: "France", maxResultsPerSource: 30, minScore: 60 },
-      criteria: { keywords: [], excludeKeywords: [], experience: "", contractTypes: [], remoteOk: true, maxSalary: null },
+      search: {
+        query: "",
+        location: "France",
+        maxResultsPerSource: 30,
+        minScore: 60,
+      },
+      criteria: {
+        keywords: [],
+        excludeKeywords: [],
+        experience: "",
+        contractTypes: [],
+        remoteOk: true,
+        maxSalary: null,
+      },
       sources: [],
     };
   }

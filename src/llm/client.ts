@@ -25,13 +25,20 @@ export async function chat(
       messages,
       temperature: options.temperature ?? 0.2,
       max_tokens: options.maxTokens ?? 1024,
+      response_format: { type: "json_object" },  // Force Mistral à retourner du JSON valide
     }),
   });
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
     throw new Error(`LLM HTTP ${res.status}: ${txt.slice(0, 300)}`);
   }
-  const data = (await res.json()) as ChatResponse;
+  let data: ChatResponse;
+  try {
+    data = (await res.json()) as ChatResponse;
+  } catch (e) {
+    const rawText = await res.text().catch(() => "");
+    throw new Error(`LLM réponse non-JSON: ${rawText.slice(0, 300)}`);
+  }
   return data.choices?.[0]?.message?.content?.trim() ?? "";
 }
 
@@ -39,6 +46,7 @@ export function extractJson<T>(text: string): T {
   // Récupère le premier bloc JSON (avec ou sans markdown ```json)
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const candidate = fenced ? fenced[1] : text;
+  
   // Trouve la première accolade ouvrante jusqu'à la fermante équilibrée
   const start = candidate.indexOf("{");
   const startArr = candidate.indexOf("[");
@@ -63,10 +71,41 @@ export function extractJson<T>(text: string): T {
     else if (c === "}" || c === "]") {
       depth--;
       if (depth === 0) {
-        const slice = candidate.slice(s, i + 1);
-        return JSON.parse(slice) as T;
+        let slice = candidate.slice(s, i + 1);
+        
+        // Tentative de correction du JSON : ajouter des guillemets manquants
+        try {
+          return JSON.parse(slice) as T;
+        } catch (e) {
+          // Si le JSON est invalide, essayer de corriger les strings sans guillemets
+          const corrected = fixJsonStrings(slice);
+          try {
+            return JSON.parse(corrected) as T;
+          } catch {
+            throw new Error("JSON incomplet dans la réponse LLM");
+          }
+        }
       }
     }
   }
   throw new Error("JSON incomplet dans la réponse LLM");
+}
+
+/**
+ * Corrige les strings JSON sans guillemets dans les tableaux
+ * Ex: [item1, item2] -> ["item1", "item2"]
+ */
+function fixJsonStrings(json: string): string {
+  // Remplace les éléments de tableau sans guillemets
+  // Pattern: valeur simple (sans espace ni guillemet) dans un tableau
+  return json.replace(
+    /(\[[^\]]*?)(\s*)([a-zA-Zà-üÀ-Ü0-9\-_]+)(\s*,?\s*)/g,
+    (match, prefix, spaces, word, suffix) => {
+      // Vérifier que le mot n'est pas déjà entre guillemets
+      if (!word.startsWith('"') && !word.endsWith('"')) {
+        return `${prefix}${spaces}"${word}"${suffix}`;
+      }
+      return match;
+    }
+  );
 }

@@ -12,33 +12,56 @@ let cachedToken: { value: string; expiresAt: number } | null = null;
 async function getToken(): Promise<string> {
   const env = loadEnv();
   if (!env.FT_CLIENT_ID || !env.FT_CLIENT_SECRET) {
-    throw new Error("France Travail: FT_CLIENT_ID et FT_CLIENT_SECRET requis");
+    throw new Error(
+      "France Travail: FT_CLIENT_ID et FT_CLIENT_SECRET requis. " +
+        "Inscrivez-vous sur https://pole-emploi.io/inscription pour obtenir vos identifiants.",
+    );
   }
   if (cachedToken && Date.now() < cachedToken.expiresAt) {
     return cachedToken.value;
   }
-  const token = await postForm<FTTokenResponse>(
-    "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=%2Fpartenaire",
-    {
-      grant_type: "client_credentials",
-      client_id: env.FT_CLIENT_ID,
-      client_secret: env.FT_CLIENT_SECRET,
-      scope: `api_offresdemploiv2 o2dsoivre ${env.FT_CLIENT_ID} partenaire`,
-    },
-    {
-      headers: {
-        // Basic auth requis par l'API France Travail
-        Authorization:
-          "Basic " +
-          Buffer.from(`${env.FT_CLIENT_ID}:${env.FT_CLIENT_SECRET}`).toString("base64"),
+  try {
+    const token = await postForm<FTTokenResponse>(
+      "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=%2Fpartenaire",
+      {
+        grant_type: "client_credentials",
+        client_id: env.FT_CLIENT_ID,
+        client_secret: env.FT_CLIENT_SECRET,
+        scope: `api_offresdemploiv2 o2dsoivre ${env.FT_CLIENT_ID} partenaire`,
       },
-    },
-  );
-  cachedToken = {
-    value: token.access_token,
-    expiresAt: Date.now() + (token.expires_in - 60) * 1000,
-  };
-  return cachedToken.value;
+      {
+        headers: {
+          // Basic auth requis par l'API France Travail
+          Authorization:
+            "Basic " +
+            Buffer.from(`${env.FT_CLIENT_ID}:${env.FT_CLIENT_SECRET}`).toString(
+              "base64",
+            ),
+        },
+        timeoutMs: 30_000,
+      },
+    );
+    cachedToken = {
+      value: token.access_token,
+      expiresAt: Date.now() + (token.expires_in - 60) * 1000,
+    };
+    return cachedToken.value;
+  } catch (e) {
+    const errorMsg = (e as Error).message;
+    if (
+      errorMsg.includes("400") ||
+      errorMsg.includes("401") ||
+      errorMsg.includes("403")
+    ) {
+      throw new Error(
+        `France Travail: Erreur d'authentification. Vérifiez vos FT_CLIENT_ID et FT_CLIENT_SECRET dans .env. ` +
+          `Erreur: ${errorMsg}`,
+      );
+    }
+    throw new Error(
+      `France Travail: Impossible d'obtenir un token: ${errorMsg}`,
+    );
+  }
 }
 
 interface FTResult {

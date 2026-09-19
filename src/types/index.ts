@@ -27,11 +27,7 @@ export interface KeywordExpansion {
   relatedTerms: string[];
 }
 
-export type SourceType =
-  | "francetravail"
-  | "indeed"
-  | "leboncoin"
-  | "generic";
+export type SourceType = "francetravail" | "indeed" | "leboncoin" | "generic";
 
 export interface SourceConfig {
   name: string;

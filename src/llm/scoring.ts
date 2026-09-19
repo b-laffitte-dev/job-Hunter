@@ -18,7 +18,7 @@ export async function scoreJobs(
 
   const crit = config.criteria;
   const system =
-    "Tu es un assistant qui évalue la pertinence d'offres d'emploi vis-à-vis d'un profil de recherche. Tu réponds uniquement en JSON.";
+    "Tu es un assistant qui évalue la pertinence d'offres d'emploi. Réponds UNIQUEMENT en JSON valide avec le schema: {\"scores\":[{\"index\":number,\"score\":number,\"reasons\":string[]}]}";
 
   // On batche par 10 pour rester dans les limites de tokens
   const BATCH = 10;
@@ -33,26 +33,18 @@ export async function scoreJobs(
       location: o.location,
       contractType: o.contractType,
       salary: o.salary,
-      description: o.description?.slice(0, 500) ?? null,
+      description: o.description?.slice(0, 200) ?? null,
     }));
 
-    const user = `Profil de recherche:
-- Requête: "${config.search.query}"
-- Lieu souhaité: ${config.search.location}
-- Mots-clés: ${crit.keywords.join(", ")}
-- À exclure: ${crit.excludeKeywords.join(", ") || "(aucun)"}
-- Expérience: ${crit.experience || "(non précisée)"}
-- Contrats acceptés: ${crit.contractTypes.join(", ") || "(tous)"}
-- Télétravail ok: ${crit.remoteOk ? "oui" : "non"}
-- Salaire max souhaité: ${crit.maxSalary ?? "(non précisé)"}
-- Termes étendus: ${expandedKeywords.join(", ")}
+    const user = `Recherche: "${config.search.query}" à ${config.search.location}.
+Mots-clés: ${crit.keywords.slice(0, 5).join(", ")}${crit.keywords.length > 5 ? "..." : ""}.
+Exclure: ${crit.excludeKeywords.join(", ") || "aucun"}.
 
-Évalue chaque offre ci-dessous avec un score de 0 à 100 selon sa pertinence. Pénalise fortement les offres contenant un mot-clé à exclure. Renvoie UNIQUEMENT un JSON:
-{"scores": [{"index": 0, "score": 85, "reasons": ["intitulé correspondant", "bon lieu"]}, ...]}
-Une raison courte par offre, en français. Index correspond à l'ordre du tableau.
+Évalue ces ${batch.length} offres avec un score 0-100. Pénalise les mots exclus. Renvoie UNIQUEMENT:
+{"scores":[{"index":0,"score":85,"reasons":["raison courte en français"]},...]}
 
 Offres:
-${JSON.stringify(payload, null, 0)}`;
+${JSON.stringify(payload)}`;
 
     let parsed: ScoreLLMResponse;
     try {
@@ -61,7 +53,7 @@ ${JSON.stringify(payload, null, 0)}`;
           { role: "system", content: system },
           { role: "user", content: user },
         ],
-        { temperature: 0.0, maxTokens: 900 },
+        { temperature: 0.0, maxTokens: 2000 },
       );
       parsed = extractJson<ScoreLLMResponse>(raw);
     } catch (e) {
@@ -76,10 +68,16 @@ ${JSON.stringify(payload, null, 0)}`;
       const idx = batch.indexOf(o);
       const s = parsed.scores?.find((x) => x.index === idx);
       const score = Math.max(0, Math.min(100, s?.score ?? 0));
+      // Normaliser reasons pour être toujours un tableau
+      const reasons = Array.isArray(s?.reasons)
+        ? s.reasons
+        : s?.reasons
+          ? [s.reasons]
+          : [];
       scored.push({
         ...o,
         score,
-        scoreReasons: s?.reasons ?? [],
+        scoreReasons: reasons,
         expandedKeywords,
       });
     }
@@ -94,7 +92,8 @@ function heuristicScore(
 ): ScoredJob {
   let score = 50;
   const reasons: string[] = [];
-  const text = `${o.title} ${o.description ?? ""} ${o.company ?? ""}`.toLowerCase();
+  const text =
+    `${o.title} ${o.description ?? ""} ${o.company ?? ""}`.toLowerCase();
   for (const k of expandedKeywords) {
     if (text.includes(k)) {
       score += 5;

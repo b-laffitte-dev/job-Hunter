@@ -12,9 +12,15 @@ function dataDir(): string {
   }
   return _dataDir;
 }
-function seenPath(): string { return resolve(dataDir(), "seen.json"); }
-function latestPath(): string { return resolve(dataDir(), "latest.json"); }
-function historyDir(): string { return resolve(dataDir(), "history"); }
+function seenPath(): string {
+  return resolve(dataDir(), "seen.json");
+}
+function latestPath(): string {
+  return resolve(dataDir(), "latest.json");
+}
+function historyDir(): string {
+  return resolve(dataDir(), "history");
+}
 
 export interface SeenStore {
   seenIds: string[];
@@ -50,7 +56,8 @@ export function markSeen(offers: JobOffer[], store: SeenStore): void {
   }
   // Limite pour éviter une croissance infinie : on garde les 10 000 derniers
   if (store.seenIds.length > 10000) store.seenIds = store.seenIds.slice(-10000);
-  if (store.seenUrls.length > 10000) store.seenUrls = store.seenUrls.slice(-10000);
+  if (store.seenUrls.length > 10000)
+    store.seenUrls = store.seenUrls.slice(-10000);
 }
 
 export function saveLatest(offers: ScoredJob[]): void {

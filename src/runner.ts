@@ -25,6 +25,7 @@ export interface RunResult {
   newOffers: number;
   retainedAfterScore: number;
   archivePath: string;
+  jobs?: ScoredJob[]; // Ajout pour retourner les offres directement
 }
 
 export async function runOnce(configPath?: string): Promise<RunResult> {
@@ -36,16 +37,22 @@ export async function runWithConfig(config: AppConfig): Promise<RunResult> {
   const runId = new Date().toISOString().replace(/[:.]/g, "-");
 
   console.log(`\n=== Job Hunter AI - run ${runId} ===`);
-  console.log(`Requête: "${config.search.query}" | Lieu: ${config.search.location}`);
+  console.log(
+    `Requête: "${config.search.query}" | Lieu: ${config.search.location}`,
+  );
 
   // 1. Génération de mots-clés par le LLM
   let expanded: string[] = config.criteria.keywords.slice();
   try {
     const expansion = await expandKeywords(config);
     expanded = expansion.expanded;
-    console.log(`[llm] ${expanded.length} mots-clés étendus: ${expanded.slice(0, 8).join(", ")}...`);
+    console.log(
+      `[llm] ${expanded.length} mots-clés étendus: ${expanded.slice(0, 8).join(", ")}...`,
+    );
   } catch (e) {
-    console.warn(`[llm] expansion échouée, utilisation des mots-clés de base: ${(e as Error).message}`);
+    console.warn(
+      `[llm] expansion échouée, utilisation des mots-clés de base: ${(e as Error).message}`,
+    );
   }
 
   // 2. Scraping de toutes les sources
@@ -55,14 +62,18 @@ export async function runWithConfig(config: AppConfig): Promise<RunResult> {
   // 3. Filtrage des nouvelles offres (vs historique)
   const seen = loadSeen();
   const fresh = offers.filter((o) => isNewOffer(o, seen));
-  console.log(`[store] ${fresh.length} nouvelles offres (sur ${offers.length})`);
+  console.log(
+    `[store] ${fresh.length} nouvelles offres (sur ${offers.length})`,
+  );
 
   // 4. Scoring LLM des nouvelles offres
   let scored: ScoredJob[] = [];
   if (fresh.length > 0) {
     scored = await scoreJobs(config, fresh, expanded);
     const retained = scored.filter((o) => o.score >= config.search.minScore);
-    console.log(`[llm] ${retained.length} offres retenues (score >= ${config.search.minScore})`);
+    console.log(
+      `[llm] ${retained.length} offres retenues (score >= ${config.search.minScore})`,
+    );
     scored = retained;
   }
 
@@ -80,8 +91,12 @@ export async function runWithConfig(config: AppConfig): Promise<RunResult> {
     writeFileSync(csvPath, toCSV(scored), "utf-8");
     console.log(`[store] archivé: ${archivePath} (csv: ${csvPath})`);
 
-    // 6. Alerte email
-    await sendEmailAlert(scored, runId);
+    // 6. Alerte email (ne pas bloquer la recherche si l'email échoue)
+    try {
+      await sendEmailAlert(scored, runId);
+    } catch (e) {
+      console.warn(`[notifier] email échoué: ${(e as Error).message}`);
+    }
   } else {
     archiveRun([], runId);
     console.log("[store] aucune offre retenue, pas d'alerte email envoyée");
@@ -94,6 +109,7 @@ export async function runWithConfig(config: AppConfig): Promise<RunResult> {
     newOffers: fresh.length,
     retainedAfterScore: scored.length,
     archivePath: resolve("data", "history", `run-${runId}.json`),
+    jobs: scored,
   };
 }
 

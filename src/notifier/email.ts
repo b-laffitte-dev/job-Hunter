@@ -47,7 +47,9 @@ function renderText(jobs: ScoredJob[], runId: string): string {
         `   Contrat: ${j.contractType ?? "—"}`,
         `   Salaire: ${j.salary ?? "—"}`,
         `   Source: ${j.source}`,
-        j.scoreReasons.length ? `   Raisons: ${j.scoreReasons.join(" ; ")}` : null,
+        j.scoreReasons.length
+          ? `   Raisons: ${j.scoreReasons.join(" ; ")}`
+          : null,
         `   Lien: ${j.url}`,
         "",
       ]
