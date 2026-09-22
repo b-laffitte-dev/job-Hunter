@@ -4,7 +4,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import { readFileSync, existsSync } from "node:fs";
-import { resolve, extname } from "node:path";
+import { resolve, extname, sep } from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
 import { loadEnv } from "./env.js";
 import {
@@ -23,6 +23,7 @@ import {
   startConversation,
   getConversationMessages,
   resetAgent,
+  deleteAgent,
   type AgentSearchResult,
 } from "./llm/client.js";
 import type { JobResult, ChatMessage } from "./types/index.js";
@@ -41,21 +42,53 @@ export interface Session {
   state: ChatState;
   history: { role: "user" | "assistant"; content: string }[];
   running: boolean;
+  lastUsed: number;
   conversationId?: string; // ID de la conversation Mistral en cours
 }
 
+const MAX_HISTORY_LENGTH = 50;
+const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const SESSION_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+const MAX_BODY_BYTES = 10_000;
+
 const sessions = new Map<string, Session>();
+let lastSweep = Date.now();
+
+function sweepSessions(): void {
+  const now = Date.now();
+  if (now - lastSweep < SESSION_SWEEP_INTERVAL_MS) return;
+  lastSweep = now;
+  for (const [id, s] of sessions) {
+    if (!s.running && now - s.lastUsed > SESSION_MAX_AGE_MS) {
+      sessions.delete(id);
+    }
+  }
+}
+
+function touchSession(s: Session): void {
+  s.lastUsed = Date.now();
+}
+
+function pushHistory(session: Session, entry: { role: "user" | "assistant"; content: string }): void {
+  session.history.push(entry);
+  if (session.history.length > MAX_HISTORY_LENGTH) {
+    session.history.splice(0, session.history.length - MAX_HISTORY_LENGTH);
+  }
+}
 
 function getSession(id: string): Session {
+  sweepSessions();
   let s = sessions.get(id);
   if (!s) {
     s = {
       state: getDefaultState(),
       history: [],
       running: false,
+      lastUsed: Date.now(),
     };
     sessions.set(id, s);
   }
+  touchSession(s);
   return s;
 }
 
@@ -72,6 +105,7 @@ function serveStatic(res: ServerResponse, urlPath: string): boolean {
   const publicDir = resolve("public");
   const rel = route === "/" ? "/index.html" : route;
   const filePath = resolve(publicDir, rel.replace(/^\//, ""));
+  if (!filePath.startsWith(publicDir + sep)) return false;
   if (!existsSync(filePath)) return false;
   const ext = extname(filePath);
   const mime = MIME[ext] ?? "application/octet-stream";
@@ -83,7 +117,14 @@ function serveStatic(res: ServerResponse, urlPath: string): boolean {
 
 async function readBody(req: IncomingMessage): Promise<string> {
   let data = "";
-  for await (const chunk of req) data += chunk;
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > MAX_BODY_BYTES) {
+      throw new Error("Corps de requête trop volumineux");
+    }
+    data += chunk;
+  }
   return data;
 }
 
@@ -96,10 +137,10 @@ async function handleChatMessage(
   userMessage: string,
 ): Promise<void> {
   const session = getSession(sessionId);
-  console.log(`[chat] Message utilisateur: "${userMessage}"`);
+  console.log(`[chat] Message utilisateur (session: ${sessionId.slice(0, 8)}, taille: ${userMessage.length})`);
   
   // Ajouter le message à l'historique
-  session.history.push({ role: "user", content: userMessage });
+  pushHistory(session, { role: "user", content: userMessage });
 
   let result: InterpretationResult;
   
@@ -118,7 +159,7 @@ async function handleChatMessage(
   }
 
   // Ajouter la réponse à l'historique
-  session.history.push({ role: "assistant", content: result.reply });
+  pushHistory(session, { role: "assistant", content: result.reply });
 
   // Envoyer la réponse immédiate
   ws.send(
@@ -209,7 +250,8 @@ export function startServer(): { url: string; close: () => void } {
   const env = loadEnv();
   const server = createServer(async (req, res) => {
     const url = req.url ?? "/";
-    res.setHeader("access-control-allow-origin", "*");
+    const allowedOrigin = `http://${env.SERVE_HOST === "0.0.0.0" ? "localhost" : env.SERVE_HOST}:${env.SERVE_PORT}`;
+    res.setHeader("access-control-allow-origin", allowedOrigin);
     res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS");
     res.setHeader("access-control-allow-headers", "content-type");
     
@@ -227,12 +269,6 @@ export function startServer(): { url: string; close: () => void } {
       if (url === "/api/state" && req.method === "GET") {
         const session = getSession("default");
         sendJson(res, 200, session.state);
-        return;
-      }
-
-      // API: obtenir les derniers résultats (plus utilisé dans cette version)
-      if (url === "/api/latest" && req.method === "GET") {
-        sendJson(res, 200, { jobs: [] });
         return;
       }
 
@@ -293,11 +329,11 @@ export function startServer(): { url: string; close: () => void } {
     );
 
     ws.on("message", (data) => {
-      console.log(`[server] ← Message reçu (session: ${sessionId}, taille: ${data.toString().length} bytes)`);
+      console.log(`[server] ← Message reçu (session: ${sessionId.slice(0, 8)}, taille: ${data.toString().length} bytes)`);
       let msg: { type: string; message?: string };
       try {
         msg = JSON.parse(data.toString());
-        console.log(`[server] ← Type: ${msg.type}, Message: ${msg.message?.slice(0, 100) || '(vide)'}`);
+        console.log(`[server] ← Type: ${msg.type}`);
       } catch {
         console.log(`[server] ✗ Message JSON invalide`);
         ws.send(
@@ -342,8 +378,8 @@ export function startServer(): { url: string; close: () => void } {
     close: () => {
       wss.close();
       server.close();
-      // Réinitialiser les agents
-      resetAgent();
+      // Supprimer l'agent Mistral côté API pour éviter l'accumulation d'agents orphelins
+      void deleteAgent();
     },
   };
 }

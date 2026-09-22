@@ -10,6 +10,8 @@ export interface MistralConfig {
   BASE_URL: string;
 }
 
+const FETCH_TIMEOUT_MS = 30_000;
+
 // Charge la configuration Mistral
 export function loadMistralConfig(): MistralConfig {
   const env = loadEnv();
@@ -48,6 +50,7 @@ export async function chat(
       "content-type": "application/json",
       "authorization": `Bearer ${config.API_KEY}`,
     },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     body: JSON.stringify({
       model: config.MODEL,
       messages,
@@ -61,7 +64,7 @@ export async function chat(
   
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
-    console.log(`[llm/client] ✗ Erreur HTTP ${res.status}: ${txt.slice(0, 100)}`);
+    console.error(`[llm/client] ✗ Erreur HTTP ${res.status}: ${txt.slice(0, 100)}`);
     throw new Error(`LLM HTTP ${res.status}: ${txt.slice(0, 300)}`);
   }
   
@@ -70,7 +73,7 @@ export async function chat(
     data = (await res.json()) as ChatResponse;
   } catch (e) {
     const rawText = await res.text().catch(() => "");
-    console.log(`[llm/client] ✗ Réponse non-JSON: ${rawText.slice(0, 100)}`);
+    console.error(`[llm/client] ✗ Réponse non-JSON: ${rawText.slice(0, 100)}`);
     throw new Error(`LLM réponse non-JSON: ${rawText.slice(0, 300)}`);
   }
   
@@ -135,17 +138,29 @@ export interface AgentSearchResult {
 // Variable globale pour stocker l'agent créé
 let currentAgent: MistralAgent | null = null;
 let currentConversation: MistralConversation | null = null;
+let createAgentPromise: Promise<MistralAgent> | null = null;
 
 /**
  * Crée un agent Mistral avec capacité de recherche web
+ * Utilise un verrou pour éviter la création de plusieurs agents en cas d'appels concurrents
  */
-export async function createAgent(): Promise<MistralAgent> {
-  const config = loadMistralConfig();
-  
+export function createAgent(): Promise<MistralAgent> {
   if (currentAgent) {
     console.log(`[llm/client] → Agent déjà créé: ${currentAgent.id}`);
-    return currentAgent;
+    return Promise.resolve(currentAgent);
   }
+
+  if (!createAgentPromise) {
+    createAgentPromise = doCreateAgent().finally(() => {
+      createAgentPromise = null;
+    });
+  }
+
+  return createAgentPromise;
+}
+
+async function doCreateAgent(): Promise<MistralAgent> {
+  const config = loadMistralConfig();
 
   console.log(`[llm/client] → Création d'un nouvel agent Mistral...`);
   
@@ -155,6 +170,7 @@ export async function createAgent(): Promise<MistralAgent> {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${config.API_KEY}`,
     },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     body: JSON.stringify({
       name: "Job Hunter Agent",
       model: config.MODEL,
@@ -214,6 +230,7 @@ export async function startConversation(userMessage: string): Promise<{
       "Content-Type": "application/json",
       "Authorization": `Bearer ${config.API_KEY}`,
     },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     body: JSON.stringify({
       agent_id: agent.id,
       inputs: userMessage,
@@ -227,7 +244,6 @@ export async function startConversation(userMessage: string): Promise<{
   }
 
   const responseData: any = await response.json();
-  console.log(`[llm/client] API response:`, responseData);
   
   const conversation: MistralConversation = {
     id: responseData.conversation_id || responseData.id,
@@ -310,6 +326,7 @@ export async function getConversationStatus(conversationId: string): Promise<str
       headers: {
         "Authorization": `Bearer ${config.API_KEY}`,
       },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -317,7 +334,6 @@ export async function getConversationStatus(conversationId: string): Promise<str
     }
 
     const responseData: any = await response.json();
-    console.log(`[llm/client] Status check response keys:`, Object.keys(responseData));
     
     // Check various possible status fields
     // Mistral Conversations API may return status at root level or in different fields
@@ -361,10 +377,16 @@ function getOutputsStatus(outputs: any[]): string | null {
 
 /**
  * Attend que la conversation soit terminée
+ * @param timeoutMs Durée maximale d'attente (défaut: 30s, configurable via MISTRAL_CONVERSATION_TIMEOUT_MS)
+ * @param pollIntervalMs Intervalle entre deux vérifications (défaut: 2s)
  */
-export async function waitForConversationCompletion(conversationId: string, timeoutMs: number = 30000): Promise<void> {
+export async function waitForConversationCompletion(
+  conversationId: string,
+  timeoutMs: number = Number(process.env.MISTRAL_CONVERSATION_TIMEOUT_MS) || 30_000,
+  pollIntervalMs: number = 2_000,
+): Promise<void> {
   const startTime = Date.now();
-  const pollInterval = 2000; // Vérifier toutes les 2 secondes
+  const pollInterval = Math.max(500, pollIntervalMs);
   
   while (Date.now() - startTime < timeoutMs) {
     const status = await getConversationStatus(conversationId);
@@ -400,6 +422,7 @@ export async function getConversationMessages(conversationId: string): Promise<M
     headers: {
       "Authorization": `Bearer ${config.API_KEY}`,
     },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -409,40 +432,11 @@ export async function getConversationMessages(conversationId: string): Promise<M
   }
 
   const responseData: any = await response.json();
-  console.log(`[llm/client] Conversation API response keys:`, Object.keys(responseData));
   
-  // Transform Mistral Conversations API response to our MistralMessage format
-  // The API returns outputs array with tool executions and message outputs
   const messages: MistralMessage[] = [];
   
-  // Handle outputs array (Mistral Conversations API format)
   if (responseData.outputs && Array.isArray(responseData.outputs)) {
-    for (const output of responseData.outputs) {
-      // Handle message.output type
-      if (output.type === 'message.output' || output.object === 'message.output') {
-        const contentText = typeof output.content === 'string' ? output.content : 
-                          (output.text ? output.text : JSON.stringify(output.content || output));
-        messages.push({
-          role: output.role || "assistant",
-          content: [{
-            type: "text",
-            text: contentText,
-          }],
-        });
-      }
-      // Handle legacy message format
-      else if (output.type === 'message' || output.object === 'message') {
-        const contentText = typeof output.content === 'string' ? output.content : 
-                          (output.text ? output.text : JSON.stringify(output.content || output));
-        messages.push({
-          role: output.role || "assistant",
-          content: [{
-            type: "text",
-            text: contentText,
-          }],
-        });
-      }
-    }
+    messages.push(...extractMessagesFromOutputs(responseData.outputs));
   }
   
   // Fallback: try messages array if outputs is not available
@@ -488,7 +482,7 @@ export async function searchJobs(query: string, location?: string): Promise<Agen
     } else {
       // Otherwise, wait for completion and fetch messages
       console.log(`[llm/client] Attente de la fin du traitement Mistral...`);
-      await waitForConversationCompletion(conversation.id, 30000);
+      await waitForConversationCompletion(conversation.id);
       console.log(`[llm/client] Récupération des messages pour conversation: ${conversation.id}`);
       messages = await getConversationMessages(conversation.id);
     }
@@ -512,10 +506,9 @@ export async function searchJobs(query: string, location?: string): Promise<Agen
       // Extract sources from the JSON (can be 'sources' or 'references' field)
       references = parsed.sources || parsed.references || [];
     } catch (e) {
-      console.log(`[llm/client] ⚠ Extraction des références échouée: ${e}`);
-      console.log(`[llm/client] Contenu analysé (premier 1000 chars):`, textContent.slice(0, 1000));
+      console.error(`[llm/client] ⚠ Extraction des références échouée: ${(e as Error).message}`);
     }
-    console.log(`[llm/client] References extraites:`, references);
+    console.log(`[llm/client] Références extraites: ${references.length}`);
 
     let jobs: JobResult[] = [];
     try {
@@ -565,8 +558,10 @@ export function isValidUrl(url: string): boolean {
       'hellowork.com', 'qapa.fr',
     ];
     
-    const hostname = parsed.hostname || '';
-    const isValidDomain = validDomains.some(d => hostname.includes(d));
+    const hostname = parsed.hostname || "";
+    const isValidDomain = validDomains.some(
+      (d) => hostname === d || hostname.endsWith(`.${d}`),
+    );
     
     if (!isValidDomain) {
       return false;
@@ -592,17 +587,11 @@ export function isValidUrl(url: string): boolean {
 }
 
 export function extractJobResults(text: string, query: string, references: string[]): JobResult[] {
-  // Log for debugging - show first part of text
-  console.log(`[llm/client] JSON extrait:`, text.slice(0, 200) + (text.length > 200 ? '...' : ''));
-
   try {
-    // Use the existing extractJson function which is more robust
     const parsed = extractJson<any>(text);
-    console.log(`[llm/client] JSON parse réussi, clés:`, Object.keys(parsed));
     
-    // Helper to create job result with URL validation
     const createJobResult = (item: any): JobResult | null => {
-      const job: JobResult = {
+      return {
         title: item.title || item.titre || query,
         company: item.company || item.entreprise,
         location: item.location || item.lieu,
@@ -612,51 +601,31 @@ export function extractJobResults(text: string, query: string, references: strin
         salary: item.salary || item.salaire || undefined,
         source: item.source || "Mistral Web Search",
       };
-      // Only return if URL is valid or if there's no URL (we'll use references)
-      return job;
     };
     
-    // Extract sources if available (from the assistant's response)
     const sources = (parsed as any).sources || references;
     
+    const resultsFrom = (items: any[]): JobResult[] => {
+      const results = items.map(createJobResult).filter(Boolean) as JobResult[];
+      if (results.every(r => !isValidUrl(r.url)) && sources && sources.length > 0) {
+        return sources.map((src: string) => ({
+          title: query,
+          url: src,
+          description: `Offre depuis: ${src}`,
+          source: "Mistral Web Search",
+        }));
+      }
+      return results;
+    };
+
     if (Array.isArray(parsed)) {
-      const results = parsed.map(createJobResult).filter(Boolean) as JobResult[];
-      // If no valid URLs found, use sources from the JSON
-      if (results.every(r => !isValidUrl(r.url)) && sources && sources.length > 0) {
-        return sources.map((src: string) => ({
-          title: query,
-          url: src,
-          description: `Offre depuis: ${src}`,
-          source: "Mistral Web Search",
-        }));
-      }
-      return results;
+      return resultsFrom(parsed);
     }
-    if (parsed.jobs && Array.isArray(parsed.jobs)) {
-      const results = parsed.jobs.map(createJobResult).filter(Boolean) as JobResult[];
-      // If no valid URLs found, use sources from the JSON
-      if (results.every(r => !isValidUrl(r.url)) && sources && sources.length > 0) {
-        return sources.map((src: string) => ({
-          title: query,
-          url: src,
-          description: `Offre depuis: ${src}`,
-          source: "Mistral Web Search",
-        }));
-      }
-      return results;
+    if (Array.isArray(parsed.jobs)) {
+      return resultsFrom(parsed.jobs);
     }
-    if (parsed.offres && Array.isArray(parsed.offres)) {
-      const results = parsed.offres.map(createJobResult).filter(Boolean) as JobResult[];
-      // If no valid URLs found, use sources from the JSON
-      if (results.every(r => !isValidUrl(r.url)) && sources && sources.length > 0) {
-        return sources.map((src: string) => ({
-          title: query,
-          url: src,
-          description: `Offre depuis: ${src}`,
-          source: "Mistral Web Search",
-        }));
-      }
-      return results;
+    if (Array.isArray(parsed.offres)) {
+      return resultsFrom(parsed.offres);
     }
     
     return [{
@@ -735,25 +704,19 @@ export function extractJson<T>(text: string): T {
         try {
           return JSON.parse(slice) as T;
         } catch {
-          const corrected = fixJsonStrings(slice);
-          try {
-            return JSON.parse(corrected) as T;
-          } catch {
-            // Parse error - continue searching for another JSON block
-            // Reset and look for next { or [
-            const nextStart = text.indexOf('{', i + 1);
-            const nextStartArr = text.indexOf('[', i + 1);
-            if (nextStart === -1 && nextStartArr === -1) {
-              break;
-            }
-            s = nextStart === -1 ? nextStartArr : 
-                (nextStartArr === -1 ? nextStart : Math.min(nextStart, nextStartArr));
-            if (s === -1) break;
-            i = s - 1; // Reset to new start position
-            depth = 0;
-            inStr = false;
-            esc = false;
+          // Parse error - continue searching for another JSON block
+          const nextStart = text.indexOf('{', i + 1);
+          const nextStartArr = text.indexOf('[', i + 1);
+          if (nextStart === -1 && nextStartArr === -1) {
+            break;
           }
+          s = nextStart === -1 ? nextStartArr : 
+              (nextStartArr === -1 ? nextStart : Math.min(nextStart, nextStartArr));
+          if (s === -1) break;
+          i = s - 1;
+          depth = 0;
+          inStr = false;
+          esc = false;
         }
       }
     }
@@ -762,22 +725,41 @@ export function extractJson<T>(text: string): T {
   throw new Error("JSON incomplet dans la réponse LLM");
 }
 
-function fixJsonStrings(json: string): string {
-  return json.replace(
-    /(\[[^\]]*?)(\s*)([a-zA-Zà-üÀ-Ü0-9\-_]+)(\s*,?\s*)/g,
-    (match, prefix, spaces, word, suffix) => {
-      if (!word.startsWith('"') && !word.endsWith('"')) {
-        return `${prefix}${spaces}"${word}"${suffix}`;
-      }
-      return match;
-    }
-  );
-}
-
 /**
- * Réinitialise l'agent et la conversation courants
+ * Réinitialise l'agent et la conversation courants (localement uniquement)
  */
 export function resetAgent(): void {
   currentAgent = null;
   currentConversation = null;
+}
+
+/**
+ * Supprime l'agent courant côté Mistral puis réinitialise l'état local
+ */
+export async function deleteAgent(): Promise<void> {
+  const agent = currentAgent;
+  resetAgent();
+
+  if (!agent) return;
+
+  const config = loadMistralConfig();
+
+  try {
+    const response = await fetch(`${config.AGENTS_API_URL}/${agent.id}`, {
+      method: "DELETE",
+      headers: {
+        "Authorization": `Bearer ${config.API_KEY}`,
+      },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.error(`[llm/client] ✗ Erreur suppression agent ${agent.id}: ${response.status} - ${errorText.slice(0, 200)}`);
+    } else {
+      console.log(`[llm/client] ✓ Agent supprimé: ${agent.id}`);
+    }
+  } catch (e) {
+    console.error(`[llm/client] ✗ Erreur suppression agent ${agent.id}: ${(e as Error).message}`);
+  }
 }
