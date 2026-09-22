@@ -27,6 +27,9 @@
     "chat",
     "france"
   ],
+  "engines": {
+    "node": ">=20"
+  },
   "license": "MIT",
   "dependencies": {
     "commander": "^15.0.0",
@@ -34,7 +37,6 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@jest/globals": "^30.5.2",
     "@types/node": "^26.6.2",
     "@types/ws": "^8.5.12",
     "@vitest/coverage-v8": "^5.0.1",

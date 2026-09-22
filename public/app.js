@@ -145,11 +145,3 @@ formEl.addEventListener("submit", (e) => {
 });
 
 connect();
-
-// Charge les derniers résultats connus au démarrage
-fetch("/api/latest")
-  .then((r) => r.json())
-  .then((d) => {
-    if (d && Array.isArray(d.jobs)) renderJobs(d.jobs);
-  })
-  .catch(() => {});
