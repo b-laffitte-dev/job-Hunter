@@ -23,6 +23,7 @@ import {
   startConversation,
   getConversationMessages,
   resetAgent,
+  deleteAgent,
   type AgentSearchResult,
 } from "./llm/client.js";
 import type { JobResult, ChatMessage } from "./types/index.js";
@@ -342,8 +343,8 @@ export function startServer(): { url: string; close: () => void } {
     close: () => {
       wss.close();
       server.close();
-      // Réinitialiser les agents
-      resetAgent();
+      // Supprimer l'agent Mistral côté API pour éviter l'accumulation d'agents orphelins
+      void deleteAgent();
     },
   };
 }

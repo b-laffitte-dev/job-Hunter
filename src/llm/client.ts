@@ -10,6 +10,8 @@ export interface MistralConfig {
   BASE_URL: string;
 }
 
+const FETCH_TIMEOUT_MS = 30_000;
+
 // Charge la configuration Mistral
 export function loadMistralConfig(): MistralConfig {
   const env = loadEnv();
@@ -48,6 +50,7 @@ export async function chat(
       "content-type": "application/json",
       "authorization": `Bearer ${config.API_KEY}`,
     },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     body: JSON.stringify({
       model: config.MODEL,
       messages,
@@ -135,17 +138,29 @@ export interface AgentSearchResult {
 // Variable globale pour stocker l'agent créé
 let currentAgent: MistralAgent | null = null;
 let currentConversation: MistralConversation | null = null;
+let createAgentPromise: Promise<MistralAgent> | null = null;
 
 /**
  * Crée un agent Mistral avec capacité de recherche web
+ * Utilise un verrou pour éviter la création de plusieurs agents en cas d'appels concurrents
  */
-export async function createAgent(): Promise<MistralAgent> {
-  const config = loadMistralConfig();
-  
+export function createAgent(): Promise<MistralAgent> {
   if (currentAgent) {
     console.log(`[llm/client] → Agent déjà créé: ${currentAgent.id}`);
-    return currentAgent;
+    return Promise.resolve(currentAgent);
   }
+
+  if (!createAgentPromise) {
+    createAgentPromise = doCreateAgent().finally(() => {
+      createAgentPromise = null;
+    });
+  }
+
+  return createAgentPromise;
+}
+
+async function doCreateAgent(): Promise<MistralAgent> {
+  const config = loadMistralConfig();
 
   console.log(`[llm/client] → Création d'un nouvel agent Mistral...`);
   
@@ -155,6 +170,7 @@ export async function createAgent(): Promise<MistralAgent> {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${config.API_KEY}`,
     },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     body: JSON.stringify({
       name: "Job Hunter Agent",
       model: config.MODEL,
@@ -214,6 +230,7 @@ export async function startConversation(userMessage: string): Promise<{
       "Content-Type": "application/json",
       "Authorization": `Bearer ${config.API_KEY}`,
     },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     body: JSON.stringify({
       agent_id: agent.id,
       inputs: userMessage,
@@ -310,6 +327,7 @@ export async function getConversationStatus(conversationId: string): Promise<str
       headers: {
         "Authorization": `Bearer ${config.API_KEY}`,
       },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -400,6 +418,7 @@ export async function getConversationMessages(conversationId: string): Promise<M
     headers: {
       "Authorization": `Bearer ${config.API_KEY}`,
     },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -565,8 +584,10 @@ export function isValidUrl(url: string): boolean {
       'hellowork.com', 'qapa.fr',
     ];
     
-    const hostname = parsed.hostname || '';
-    const isValidDomain = validDomains.some(d => hostname.includes(d));
+    const hostname = parsed.hostname || "";
+    const isValidDomain = validDomains.some(
+      (d) => hostname === d || hostname.endsWith(`.${d}`),
+    );
     
     if (!isValidDomain) {
       return false;
@@ -775,9 +796,40 @@ function fixJsonStrings(json: string): string {
 }
 
 /**
- * Réinitialise l'agent et la conversation courants
+ * Réinitialise l'agent et la conversation courants (localement uniquement)
  */
 export function resetAgent(): void {
   currentAgent = null;
   currentConversation = null;
+}
+
+/**
+ * Supprime l'agent courant côté Mistral puis réinitialise l'état local
+ */
+export async function deleteAgent(): Promise<void> {
+  const agent = currentAgent;
+  resetAgent();
+
+  if (!agent) return;
+
+  const config = loadMistralConfig();
+
+  try {
+    const response = await fetch(`${config.AGENTS_API_URL}/${agent.id}`, {
+      method: "DELETE",
+      headers: {
+        "Authorization": `Bearer ${config.API_KEY}`,
+      },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.error(`[llm/client] ✗ Erreur suppression agent ${agent.id}: ${response.status} - ${errorText.slice(0, 200)}`);
+    } else {
+      console.log(`[llm/client] ✓ Agent supprimé: ${agent.id}`);
+    }
+  } catch (e) {
+    console.error(`[llm/client] ✗ Erreur suppression agent ${agent.id}: ${(e as Error).message}`);
+  }
 }

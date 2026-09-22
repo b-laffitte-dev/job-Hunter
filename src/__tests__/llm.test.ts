@@ -52,6 +52,31 @@ describe('LLM Client Utilities', () => {
       expect(isValidUrl('ftp://example.com')).toBe(false);
       expect(isValidUrl('mailto:test@example.com')).toBe(false);
     });
+
+    it('should reject look-alike domains embedding a whitelisted domain', () => {
+      const lookalikeUrls = [
+        'https://indeed.com.attacker.com/viewjob?jk=12345abc',
+        'https://attacker-indeed.com/jobs/123',
+        'https://www.linkedin.com.evil.io/jobs/view/12345/',
+        'https://apec.fr.malicious.net/offre-12345.html',
+        'https://sub.glassdoor.fr.attacker.com/job',
+      ];
+
+      lookalikeUrls.forEach(url => {
+        expect(isValidUrl(url)).toBe(false);
+      });
+    });
+
+    it('should accept subdomains of whitelisted domains', () => {
+      const subdomainUrls = [
+        'https://candidat.pole-emploi.fr/offres/12345',
+        'https://fr.indeed.com/viewjob?jk=12345abc',
+      ];
+
+      subdomainUrls.forEach(url => {
+        expect(isValidUrl(url)).toBe(true);
+      });
+    });
   });
 
   describe('extractJobResults', () => {
